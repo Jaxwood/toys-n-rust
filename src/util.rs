@@ -1,5 +1,6 @@
 use std::fs;
 
+// read file and split by lines
 pub fn get_content(path: &str) -> Vec<String> {
     let file = fs::read_to_string(path).expect("file not found");
 
