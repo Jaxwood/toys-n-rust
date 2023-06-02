@@ -1,5 +1,3 @@
-use std::{env, fs};
-
 use crate::util;
 
 struct LineGroup {
