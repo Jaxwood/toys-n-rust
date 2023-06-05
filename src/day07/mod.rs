@@ -106,7 +106,7 @@ fn parse(input: &str) -> Vec<InstructionSet> {
     }
 }
 
-fn day07(path: &str, max_size: usize) -> usize {
+fn day07a(path: &str, max_size: usize) -> usize {
     let content = fs::read_to_string(path).expect("file not found");
     let instructions = parse(content.as_str());
 
@@ -149,19 +149,80 @@ fn day07(path: &str, max_size: usize) -> usize {
     directory_sizes.iter().filter(|&&x| x <= max_size).sum()
 }
 
+fn day07b(path: &str) -> usize {
+    let content = fs::read_to_string(path).expect("file not found");
+    let instructions = parse(content.as_str());
+
+    let tree = Rc::new(RefCell::new(Node::new("/", 0)));
+    let mut current = Rc::clone(&tree);
+    if let Some((_, tail)) = instructions.split_first() {
+        for instruction in tail {
+            match instruction {
+                InstructionSet::Cd(d) if *d == ".." => {
+                    let current_clone = Rc::clone(&current);
+                    current = Rc::clone(current_clone.borrow().parent.as_ref().unwrap());
+                }
+                InstructionSet::Cd(d) => {
+                    let current_clone = Rc::clone(&current);
+                    for child in current_clone.borrow().children.iter() {
+                        if child.borrow().name == *d {
+                            current = Rc::clone(child);
+                        }
+                    }
+                }
+                InstructionSet::Ls => continue,
+                InstructionSet::Dir(name) => {
+                    let new_node = Rc::new(RefCell::new(Node::new(*name, 0)));
+                    current.borrow_mut().children.push(Rc::clone(&new_node));
+                    let mut mut_child = new_node.borrow_mut();
+                    mut_child.parent = Some(Rc::clone(&current));
+                }
+                InstructionSet::File(name, size) => {
+                    let new_node = Rc::new(RefCell::new(Node::new(*name, *size)));
+                    current.borrow_mut().children.push(Rc::clone(&new_node));
+                    let mut mut_child = new_node.borrow_mut();
+                    mut_child.parent = Some(Rc::clone(&current));
+                }
+            };
+        }
+    }
+
+    let space_used = 70000000 - tree.borrow().sum();
+    let space_need = 30000000 - space_used;
+    let mut directory_sizes = vec![];
+    tree.borrow().visit(&mut directory_sizes);
+    *(directory_sizes
+        .iter()
+        .filter(|&&x| x >= space_need)
+        .min()
+        .expect("should find lowest"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn find_total_size() {
-        let result = day07("./data/day07.txt", 100000);
+    fn find_total_size_a() {
+        let result = day07a("./data/day07.txt", 100000);
         assert_eq!(result, 95437);
     }
 
     #[test]
+    fn find_total_size_b() {
+        let result = day07b("./data/day07.txt");
+        assert_eq!(result, 24933642);
+    }
+
+    #[test]
     fn find_total_size_parta() {
-        let result = day07("./data/day07final.txt", 100000);
+        let result = day07a("./data/day07final.txt", 100000);
         assert_eq!(result, 1141028);
+    }
+
+    #[test]
+    fn find_total_size_partb() {
+        let result = day07b("./data/day07final.txt");
+        assert_eq!(result, 8278005);
     }
 }
