@@ -33,6 +33,29 @@ impl Node {
         self.children.push(new_node);
     }
 
+    pub fn sum(&self) -> usize {
+        let mut sum = self.size;
+
+        for child in self.children.iter() {
+            sum = sum + child.borrow().sum();
+        }
+        return sum;
+    }
+
+    pub fn is_dir(&self) -> bool {
+        self.size == 0
+    }
+
+    pub fn visit(&self, acc: &mut Vec<usize>) {
+        acc.push(self.sum());
+
+        for child in self.children.iter() {
+            if child.borrow().is_dir() {
+                child.borrow().visit(acc);
+            }
+        }
+    }
+
     pub fn print(&self) {
         for child in self.children.iter() {
             child.borrow().print();
@@ -83,7 +106,7 @@ fn parse(input: &str) -> Vec<InstructionSet> {
     }
 }
 
-fn day07(path: &str) -> usize {
+fn day07(path: &str, max_size: usize) -> usize {
     let content = fs::read_to_string(path).expect("file not found");
     let instructions = parse(content.as_str());
 
@@ -121,9 +144,9 @@ fn day07(path: &str) -> usize {
         }
     }
 
-    tree.borrow().print();
-
-    0
+    let mut directory_sizes = vec![];
+    tree.borrow().visit(&mut directory_sizes);
+    directory_sizes.iter().filter(|&&x| x <= max_size).sum()
 }
 
 #[cfg(test)]
@@ -132,7 +155,13 @@ mod tests {
 
     #[test]
     fn find_total_size() {
-        let result = day07("./data/day07.txt");
+        let result = day07("./data/day07.txt", 100000);
         assert_eq!(result, 95437);
+    }
+
+    #[test]
+    fn find_total_size_parta() {
+        let result = day07("./data/day07final.txt", 100000);
+        assert_eq!(result, 1141028);
     }
 }
