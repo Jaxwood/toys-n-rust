@@ -25,7 +25,7 @@ fn is_visible(
     visible = true;
 
     // check right y-axis
-    for yy in *y+1..width {
+    for yy in *y + 1..width {
         let tree = forest.get(&(*x, yy)).expect("key not found");
         if tree >= candidate {
             visible = false;
@@ -51,7 +51,7 @@ fn is_visible(
     visible = true;
 
     // check bottom x-axis
-    for xx in *x+1..width {
+    for xx in *x + 1..width {
         let tree = forest.get(&(xx, *y)).expect("key not found");
         if tree >= candidate {
             visible = false;
@@ -63,7 +63,6 @@ fn is_visible(
 
 fn day08a(path: &str, width: usize) -> usize {
     let lines = util::get_content(path);
-    dbg!(lines.len());
 
     let mut forest: HashMap<(usize, usize), u32> = HashMap::new();
     for (y, line) in lines.iter().enumerate() {
