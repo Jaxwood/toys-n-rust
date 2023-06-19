@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::fs;
+use std::iter;
 
 use nom::{
     character::complete::{alpha0, digit0, newline, space1},
@@ -8,7 +9,7 @@ use nom::{
     IResult,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Move {
     Left(usize),
     Right(usize),
@@ -105,9 +106,12 @@ fn next_to(head: (i32, i32), (xx, yy): (i32, i32)) -> bool {
         (1, -1),
     ];
 
-    let neighbours: Vec<(i32, i32)> = surrounding.iter().map(|(nx, ny)| (xx+nx, yy+ny)).collect();
+    let neighbours: Vec<(i32, i32)> = surrounding
+        .iter()
+        .map(|(nx, ny)| (xx + nx, yy + ny))
+        .collect();
 
-    return neighbours.iter().any(|&neighbour| head == neighbour)
+    return neighbours.iter().any(|&neighbour| head == neighbour);
 }
 
 fn day09a(path: &str) -> usize {
@@ -131,6 +135,56 @@ fn day09a(path: &str) -> usize {
     visited.len()
 }
 
+fn get_change(m: Move) -> (i32, i32) {
+    match m {
+        Move::Right(_) => (1, 0),
+        Move::Left(_) => (-1, 0),
+        Move::Up(_) => (0, 1),
+        Move::Down(_) => (0, -1),
+    }
+}
+
+fn day09b(path: &str) -> usize {
+    let rope: Vec<(i32, i32)> = iter::repeat((0, 0)).take(10).collect();
+    let content = fs::read_to_string(path).expect("file not found");
+    let moves = parse(content.as_str());
+    moves
+        .iter()
+        .flat_map(|m| match m {
+            Move::Right(time) => iter::repeat(Move::Right(1)).take(*time),
+            Move::Left(time) => iter::repeat(Move::Left(1)).take(*time),
+            Move::Up(time) => iter::repeat(Move::Up(1)).take(*time),
+            Move::Down(time) => iter::repeat(Move::Down(1)).take(*time),
+        })
+        .fold(vec![rope], |mut acc, m| {
+            let (x, y) = get_change(m);
+            let cur = acc.last().unwrap();
+            let result = cur
+                .iter()
+                .enumerate()
+                .fold(vec![], |mut inner, (idx, tail)| {
+                    if idx == 0 {
+                        inner.push((x + tail.0, y + tail.1));
+                    } else {
+                        let head = inner.last().unwrap();
+                        if !next_to(*head, *tail) {
+                            inner.push(move_tail(*head, *tail));
+                        } else {
+                            inner.push(*tail);
+                        }
+                    }
+                    inner
+                });
+            acc.push(result);
+            acc
+        })
+        .iter()
+        .fold(HashSet::new(), |mut acc, rs| {
+            acc.insert(rs.iter().last().unwrap());
+            acc
+        }).len()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,6 +199,18 @@ mod tests {
     fn find_visible_trees_parta() {
         let result = day09a("./data/day09final.txt");
         assert_eq!(result, 6087);
+    }
+
+    #[test]
+    fn find_visible_trees_partb() {
+        let result = day09b("./data/day09.txt");
+        assert_eq!(result, 1);
+    }
+
+    #[test]
+    fn find_visible_trees_final_partb() {
+        let result = day09b("./data/day09final.txt");
+        assert_eq!(result, 2493);
     }
 
     #[test]
