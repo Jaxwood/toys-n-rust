@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use std::fs;
+use std::{collections::HashMap, fs};
 
 use nom::{
     branch::alt,
@@ -65,6 +65,71 @@ fn day10a(path: &str) -> i32 {
         .sum::<i32>()
 }
 
+fn is_in_range(sprite: i32, val: &i32) -> bool {
+    vec![sprite - 1, sprite, sprite + 1]
+        .iter()
+        .any(|&v| v == *val)
+}
+
+fn day10b(path: &str) -> i32 {
+    let screen = 40 * 6;
+    let content = fs::read_to_string(path).expect("file not found");
+    let instructions = parse(content.as_str());
+    let initial = &mut vec![(1, 1)];
+    let signals = instructions.iter().fold(initial, |acc, next| match next {
+        Instruction::Noop() => {
+            let (idx, x) = acc.last().expect("no last element");
+            acc.push((*idx + 1, *x));
+            acc
+        }
+        Instruction::Addx(val) => {
+            let (idx, x) = acc.last().expect("no last element");
+            acc.push((*idx + 2, *x + val));
+            acc
+        }
+    });
+
+    let sprite_positions: HashMap<_, _> = (0..screen)
+        .into_iter()
+        .enumerate()
+        .map(|(idx, _)| {
+            let result = signals.iter().take_while(|&&(i, _)| idx >= i - 1).last();
+            let register = match result {
+                Some(&(_, val)) => val,
+                None => 1 as i32,
+            };
+            return (idx as i32, register);
+        })
+        .into_iter()
+        .collect();
+
+    let pixels: String = (0..screen)
+        .into_iter()
+        .enumerate()
+        .map(|(idx, _)| match sprite_positions.get(&(idx as i32)) {
+            Some(val) => {
+                if is_in_range(idx as i32 % 40, val) {
+                    return '#';
+                } else {
+                    return '.';
+                }
+            }
+            None => panic!("no value found for idx"),
+        })
+        .collect();
+
+    let result: Vec<String> = pixels
+        .as_str()
+        .chars()
+        .collect::<Vec<char>>()
+        .chunks(40)
+        .map(|chunk| chunk.into_iter().collect())
+        .collect();
+
+    dbg!(result);
+    0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -72,6 +137,12 @@ mod tests {
     #[test]
     fn find_signal_strength() {
         let actual = day10a("./data/day10.txt");
+        assert_eq!(actual, 13140);
+    }
+
+    #[test]
+    fn draw_signal() {
+        let actual = day10b("./data/day10final.txt");
         assert_eq!(actual, 13140);
     }
 
