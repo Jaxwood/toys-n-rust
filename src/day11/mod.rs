@@ -13,68 +13,76 @@ use nom::{
 
 #[derive(Debug)]
 enum Operation {
-    Add(i32),
-    Multiply(i32),
+    Add(u64),
+    Multiply(u64),
     MultiplySelf(),
 }
 
 #[derive(Debug)]
 struct Monkey {
-    id: i32,
-    count: i32,
-    items: Vec<i32>,
+    id: u64,
+    count: u64,
+    items: Vec<u64>,
     operation: Operation,
-    check: i32,
-    true_case: i32,
-    false_case: i32,
+    check: u64,
+    true_case: u64,
+    false_case: u64,
 }
 
 impl Monkey {
-    fn inspect(&mut self, map: &mut HashMap<i32, Vec<i32>>) {
+    fn lower_worry_level(&self, worry_level: u64, chinese_remainder: Option<u64>) -> u64 {
+        if let Some(remainder) = chinese_remainder {
+            worry_level % remainder
+        } else {
+            worry_level / 3
+        }
+    }
+
+    fn inspect(&mut self, map: &mut HashMap<u64, Vec<u64>>, chinese_remainder: Option<u64>) {
         if let Some(values) = map.get(&self.id) {
-            for val in values.iter() {
-                self.items.push(*val);
+            for worry_level in values.iter() {
+                self.items.push(*worry_level);
             }
         }
 
-        self.count += self.items.len() as i32;
+        self.count += self.items.len() as u64;
 
         for item in self.items.iter() {
             match self.operation {
                 Operation::Add(num) => {
-                    let val = (item + num) / 3;
-                    if val % self.check == 0 {
+                    let worry_level = self.lower_worry_level(item + num, chinese_remainder);
+                    if worry_level % self.check == 0 {
                         map.entry(self.true_case)
-                            .and_modify(|v| v.push(val))
-                            .or_insert(vec![val]);
+                            .and_modify(|v| v.push(worry_level))
+                            .or_insert(vec![worry_level]);
                     } else {
                         map.entry(self.false_case)
-                            .and_modify(|v| v.push(val))
-                            .or_insert(vec![val]);
+                            .and_modify(|v| v.push(worry_level))
+                            .or_insert(vec![worry_level]);
                     }
                 }
                 Operation::Multiply(num) => {
-                    let val = (item * num) / 3;
-                    if val % self.check == 0 {
+                    let worry_level = self.lower_worry_level(item * num, chinese_remainder);
+                    if worry_level % self.check == 0 {
                         map.entry(self.true_case)
-                            .and_modify(|v| v.push(val))
-                            .or_insert(vec![val]);
+                            .and_modify(|v| v.push(worry_level))
+                            .or_insert(vec![worry_level]);
                     } else {
                         map.entry(self.false_case)
-                            .and_modify(|v| v.push(val))
-                            .or_insert(vec![val]);
+                            .and_modify(|v| v.push(worry_level))
+                            .or_insert(vec![worry_level]);
                     }
                 }
                 Operation::MultiplySelf() => {
-                    let val = (item * item) / 3;
-                    if val % self.check == 0 {
+                    let worry_level = self.lower_worry_level(item * item, chinese_remainder);
+                    if worry_level % self.check == 0 {
                         map.entry(self.true_case)
-                            .and_modify(|v| v.push(val))
-                            .or_insert(vec![val]);
+                            .and_modify(|v| v.push(worry_level))
+                            .or_insert(vec![worry_level]);
                     } else {
                         map.entry(self.false_case)
-                            .and_modify(|v| v.push(val))
-                            .or_insert(vec![val]);
+                            .and_modify(|v| v.push(worry_level))
+                            .or_insert(vec![worry_level]);
                     }
                 }
             }
@@ -87,11 +95,11 @@ impl Monkey {
 
 fn parse_monkey(input: &str) -> IResult<&str, Monkey> {
     // parse id
-    let (input, id) = preceded(tag("Monkey "), complete::i32)(input)?;
+    let (input, id) = preceded(tag("Monkey "), complete::u64)(input)?;
     let (input, _) = preceded(tag(":"), newline)(input)?;
     // parse items
     let (input, _) = tag("  Starting items: ")(input)?;
-    let (input, items) = separated_list1(tag(", "), complete::i32)(input)?;
+    let (input, items) = separated_list1(tag(", "), complete::u64)(input)?;
     let (input, _) = newline(input)?;
     // parse operation
     let (input, _) = tag("  Operation: new = old ")(input)?;
@@ -106,14 +114,14 @@ fn parse_monkey(input: &str) -> IResult<&str, Monkey> {
     };
     let (input, _) = newline(input)?;
     // parse condition
-    let (input, check) = preceded(tag("  Test: divisible by "), complete::i32)(input)?;
+    let (input, check) = preceded(tag("  Test: divisible by "), complete::u64)(input)?;
     let (input, _) = newline(input)?;
     // parse true case
-    let (input, true_case) = preceded(tag("    If true: throw to monkey "), complete::i32)(input)?;
+    let (input, true_case) = preceded(tag("    If true: throw to monkey "), complete::u64)(input)?;
     let (input, _) = newline(input)?;
     // parse false case
     let (input, false_case) =
-        preceded(tag("    If false: throw to monkey "), complete::i32)(input)?;
+        preceded(tag("    If false: throw to monkey "), complete::u64)(input)?;
     let (input, _) = newline(input)?;
 
     Ok((
@@ -138,26 +146,39 @@ fn parse(input: &str) -> Vec<Monkey> {
     }
 }
 
-fn day11a(path: &str) -> i32 {
+fn day11a(path: &str) -> u64 {
     let content = fs::read_to_string(path).expect("file not found");
     let mut monkeys = parse(content.as_str());
-    let mut result: HashMap<i32, Vec<i32>> = HashMap::new();
+    let mut result: HashMap<u64, Vec<u64>> = HashMap::new();
     for _ in 0..20 {
         for monkey in monkeys.iter_mut() {
-            monkey.inspect(&mut result);
+            monkey.inspect(&mut result, None);
         }
     }
 
     let mut inspections: Vec<_> = monkeys.iter().map(|monkey| monkey.count).collect();
     inspections.sort();
     inspections.reverse();
-    inspections
-        .iter_mut()
-        .take(2)
-        .fold(1, |mut acc, inspection| {
-            acc *= *inspection;
-            acc
-        })
+    inspections.iter().take(2).product()
+}
+
+fn day11b(path: &str) -> u64 {
+    let content = fs::read_to_string(path).expect("file not found");
+    let mut monkeys = parse(content.as_str());
+    let mut result: HashMap<u64, Vec<u64>> = HashMap::new();
+    // keep worry level down by using the [chinese remainder
+    // theorem](https://en.wikipedia.org/wiki/Chinese_remainder_theorem)
+    let chinese_reminder = monkeys.iter().map(|monkey| monkey.check).product::<u64>();
+    for _ in 0..10_000 {
+        for monkey in monkeys.iter_mut() {
+            monkey.inspect(&mut result, Some(chinese_reminder));
+        }
+    }
+
+    let mut inspections: Vec<_> = monkeys.iter().map(|monkey| monkey.count).collect();
+    inspections.sort();
+    inspections.reverse();
+    inspections.iter().take(2).product()
 }
 
 #[cfg(test)]
@@ -171,8 +192,20 @@ mod tests {
     }
 
     #[test]
+    fn find_most_active_monkeys_with_more_rounds() {
+        let actual = day11b("./data/day11.txt");
+        assert_eq!(actual, 2713310158);
+    }
+
+    #[test]
     fn find_most_active_monkeys_part_a() {
         let actual = day11a("./data/day11final.txt");
         assert_eq!(actual, 182293);
+    }
+
+    #[test]
+    fn find_most_active_monkeys_part_b() {
+        let actual = day11b("./data/day11final.txt");
+        assert_eq!(actual, 54832778815);
     }
 }
