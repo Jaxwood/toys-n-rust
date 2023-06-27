@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, VecDeque, HashSet},
     fs,
 };
 
@@ -57,7 +57,7 @@ fn day12a(path: &str) -> i32 {
     let content = fs::read_to_string(path).expect("file not found");
     let height_map = parse(content.as_str());
 
-    let start_location = height_map
+    let start_locations = height_map
         .iter()
         .find_map(
             |(coord, &height)| {
@@ -83,20 +83,20 @@ fn day12a(path: &str) -> i32 {
         )
         .expect("start location not found");
 
-    let mut candidates = VecDeque::from([start_location]);
-    let neigh_bors = vec![(1, 0), (0, 1), (-1, 0), (0, -1)];
+    let mut candidates = VecDeque::from([start_locations]);
+    let neighbors = vec![(1, 0), (0, 1), (-1, 0), (0, -1)];
     let mut travel_cost: HashMap<(i8, i8), i32> = HashMap::new();
     for (coord, _) in height_map.iter() {
         travel_cost.insert(*coord, i32::MAX);
     }
-    travel_cost.insert(start_location, 0);
+    travel_cost.insert(start_locations, 0);
 
     while candidates.len() > 0 {
         let (x, y) = candidates.pop_front().expect("no candidate found");
         let height = height_map.get(&(x, y)).expect("no height found");
         let cost = travel_cost.remove(&(x, y)).expect("no cost found");
 
-        let paths = neigh_bors
+        let paths = neighbors
             .iter()
             .map(|&(xx, yy)| (x + xx, y + yy))
             .filter(|coord| height_map.contains_key(coord))
@@ -122,6 +122,70 @@ fn day12a(path: &str) -> i32 {
     0
 }
 
+fn day12b(path: &str) -> i32 {
+    let content = fs::read_to_string(path).expect("file not found");
+    let height_map = parse(content.as_str());
+    let alternative_start = 'a' as u32;
+
+    let start_locations = height_map
+        .iter()
+        .filter(
+            |(_, &height)| height == START || height == alternative_start)
+        .map(|(&coord, _)|coord)
+        .collect::<HashSet<(i8,i8)>>();
+
+    let end_location = height_map
+        .iter()
+        .find_map(
+            |(coord, &height)| {
+                if height == END {
+                    Some(*coord)
+                } else {
+                    None
+                }
+            },
+        )
+        .expect("start location not found");
+
+    let mut candidates = VecDeque::from([end_location]);
+    let neighbors = vec![(1, 0), (0, 1), (-1, 0), (0, -1)];
+    let mut travel_cost: HashMap<(i8, i8), i32> = HashMap::new();
+    for (coord, _) in height_map.iter() {
+        travel_cost.insert(*coord, i32::MAX);
+    }
+    travel_cost.insert(end_location, 0);
+
+    while candidates.len() > 0 {
+        let (x, y) = candidates.pop_front().expect("no candidate found");
+        let height = height_map.get(&(x, y)).expect("no height found");
+        let cost = travel_cost.remove(&(x, y)).expect("no cost found");
+
+        let paths = neighbors
+            .iter()
+            .map(|&(xx, yy)| (x + xx, y + yy))
+            .filter(|coord| height_map.contains_key(coord))
+            .filter(|coord| match travel_cost.get(coord) {
+                Some(&val) => cost + 1 < val,
+                None => false,
+            })
+            .filter(|coord| match height_map.get(coord) {
+                Some(&candidate_height) => candidate_height >= height - 1,
+                None => false,
+            })
+            .collect::<Vec<(i8, i8)>>();
+
+        for path in paths {
+            if start_locations.contains(&path) {
+                return cost + 1;
+            }
+            travel_cost.insert(path, cost + 1);
+            candidates.push_back(path);
+        }
+    }
+
+    0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -133,8 +197,20 @@ mod tests {
     }
 
     #[test]
+    fn find_shortest_hiking_trail() {
+        let actual = day12b("./data/day12.txt");
+        assert_eq!(actual, 29);
+    }
+
+    #[test]
     fn find_shortest_path_part_a() {
         let actual = day12a("./data/day12final.txt");
         assert_eq!(actual, 391);
+    }
+
+    #[test]
+    fn find_shortest_path_part_b() {
+        let actual = day12b("./data/day12final.txt");
+        assert_eq!(actual, 386);
     }
 }
