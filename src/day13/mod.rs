@@ -88,7 +88,7 @@ fn compare(left: Vec<Token>, right: Vec<Token>) -> bool {
         }
         (Some(Token::CloseBracket), Some(_)) => compare(left.into_iter().skip(1).collect(), right),
         (Some(_), Some(Token::CloseBracket)) => compare(left, right.into_iter().skip(1).collect()),
-        (None, Some(_)) => true, // left ran out of items
+        (None, Some(_)) => true,  // left ran out of items
         (Some(_), None) => false, // right ran out of items
         _ => panic!("unhandled case"),
     }
@@ -188,10 +188,7 @@ mod tests {
 
     #[test]
     fn test_comparison_7() {
-        let actual = compare(
-            tokenize("[1,[2,[3,[4,[5,6,7]]]],8,9]"),
-            tokenize("[1,[2,[3,[4,[5,6,0]]]],8,9]"),
-        );
+        let actual = compare(tokenize("[[[]]]"), tokenize("[[]]"));
         let expected = false;
         assert_eq!(actual, expected);
     }
@@ -199,8 +196,8 @@ mod tests {
     #[test]
     fn test_comparison_8() {
         let actual = compare(
-            tokenize("[1],2,3"),
-            tokenize("[[1],2]"),
+            tokenize("[1,[2,[3,[4,[5,6,7]]]],8,9]"),
+            tokenize("[1,[2,[3,[4,[5,6,0]]]],8,9]"),
         );
         let expected = false;
         assert_eq!(actual, expected);
