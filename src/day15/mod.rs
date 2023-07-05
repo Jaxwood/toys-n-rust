@@ -4,7 +4,7 @@ use core::fmt;
 use std::{
     collections::HashSet,
     fmt::{Display, Formatter},
-    fs, cmp,
+    fs,
 };
 
 use nom::{
@@ -60,12 +60,14 @@ impl Reading {
 
     fn border_coords(&self, offset: i32) -> Vec<(i32, i32)> {
         let mut coords = Vec::new();
+        let mut x = 0;
         for y in self.sensor.y - self.distance - offset..=self.sensor.y + self.distance + offset {
-            for x in self.sensor.x - self.distance - offset..=self.sensor.x + self.distance + offset
-            {
-                if self.calculate_distance_to((x, y)) == self.distance + offset {
-                    coords.push((x, y));
-                }
+            coords.push((self.sensor.x + x, y));
+            coords.push((self.sensor.x - x, y));
+            if y >= self.sensor.y {
+                x -= 1;
+            } else {
+                x += 1;
             }
         }
         coords
@@ -128,7 +130,7 @@ fn day15a(path: &str, y: i32) -> usize {
 }
 
 fn print(candidates: &HashSet<(i32, i32)>) {
-    for y in -15..30 {
+    for y in 10..20 {
         let mut line = String::new();
         for x in -10..35 {
             if candidates.contains(&(x, y)) {
@@ -155,11 +157,13 @@ fn day15b(path: &str, max: i32) -> usize {
         .iter()
         .flat_map(|reading| reading.border_coords(1))
         .filter(|(x, y)| {
+            // filter on coords that are not in range of any reading
             !readings
                 .iter()
                 .any(|r| r.calculate_distance_to((*x, *y)) <= r.distance)
         })
         .map(|(x, y)| {
+            // count how many readings are in range of this coord
             let borders = readings.iter().fold(0, |acc, r| {
                 if r.calculate_distance_to((x, y)) == r.distance + 1 {
                     acc + 1
@@ -170,15 +174,12 @@ fn day15b(path: &str, max: i32) -> usize {
             (x, y, borders)
         })
         .collect();
-    let mut best = 0;
-    let mut result = (0, 0);
-    for (x, y, cnt) in candidates {
-        if cnt > best {
-            best = cmp::max(best, cnt);
-            result = (x, y);
-        }
-    }
-    4000000 * result.0 as usize + result.1 as usize
+
+    candidates
+        .iter()
+        .max_by(|(_, _, first), (_, _, other)| first.cmp(other))
+        .and_then(|(x, y, _)| Some(*x as usize * 4000000 + *y as usize))
+        .unwrap() as usize
 }
 
 #[cfg(test)]
@@ -200,11 +201,10 @@ mod tests {
     #[test]
     fn find_beacon_part_b() {
         let actual = day15b("./data/day15final.txt", 4000000);
-        assert_eq!(actual, 56000011);
+        assert_eq!(actual, 13197439355220);
     }
 
     #[test]
-    #[ignore]
     fn find_beacon_on_y_axis_part_a() {
         let actual = day15a("./data/day15final.txt", 2000000);
         assert_eq!(actual, 4717631);
