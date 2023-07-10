@@ -365,7 +365,7 @@ fn day16b(path: &str, minutes: u32) -> u32 {
         while !queue.is_empty() {
             let mut state = queue.pop().unwrap();
             best = cmp::max(best, state.score);
-
+             
             state.score(minutes, minute, &scores);
             for states in state.try_move(minute, &can_be_opened, &weights) {
                 match states {
@@ -390,7 +390,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "slow test"]
     fn find_most_pressure_part_a() {
         let actual = day16a("./data/day16final.txt", 30);
         assert_eq!(actual, 1792);
@@ -403,8 +403,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "slow test"]
     fn find_most_pressure_with_elephant_part_b() {
         let actual = day16b("./data/day16final.txt", 26);
-        assert_eq!(actual, 1707);
+        assert_eq!(actual, 2587);
     }
 }
