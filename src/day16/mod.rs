@@ -6,6 +6,8 @@ use std::{
     fs,
 };
 
+use itertools::iproduct;
+
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -16,13 +18,123 @@ use nom::{
 };
 
 #[derive(Debug, Clone, PartialEq)]
-struct ElephantState {
+pub struct ElephantState {
     name: String,
     minute: u32,
-    elephant: String,
+    pub elephant: String,
     elephant_minute: u32,
     score: u32,
     visited: HashSet<String>,
+}
+
+impl ElephantState {
+    fn closed(&self, valve: &str) -> bool {
+        !self.visited.contains(valve)
+    }
+
+    fn score(&mut self, until: u32, minute: u32, scores: &HashMap<&str, u32>) {
+        // score self
+        if minute == self.minute && self.closed(self.name.as_str()) {
+            self.score += (until - minute) * scores[&self.name.as_str()];
+            self.visited.insert(self.name.clone());
+            self.minute += 1;
+        }
+
+        // score elephant
+        if minute == self.elephant_minute && self.closed(&self.elephant.as_str()) {
+            self.score += (until - minute) * scores[&self.elephant.as_str()];
+            self.visited.insert(self.elephant.clone());
+            self.elephant_minute += 1;
+        }
+    }
+
+    fn try_move(
+        &self,
+        minute: u32,
+        can_be_opened: &HashSet<String>,
+        weights: &HashMap<(String, String), (u32, u32)>,
+    ) -> Vec<Option<ElephantState>> {
+        if minute != self.minute && minute != self.elephant_minute {
+            return vec![None];
+        }
+
+        if self.visited.is_superset(can_be_opened) {
+            return vec![None];
+        }
+
+        let mut result = vec![];
+
+        match (minute == self.minute, minute == self.elephant_minute) {
+            (true, true) => {
+                let candidates = can_be_opened
+                    .difference(&self.visited)
+                    .collect::<Vec<&String>>();
+
+                if candidates.len() == 1 {
+                    let (first, _) = weights[&(self.name.clone(), candidates[0].clone())];
+                    let (second, _) = weights[&(self.elephant.clone(), candidates[0].clone())];
+
+                    match first <= second {
+                        true => {
+                            let mut new_state = self.clone();
+                            new_state.name = candidates[0].clone();
+                            new_state.minute += first;
+                            result.push(Some(new_state));
+                        }
+                        false => {
+                            let mut new_state = self.clone();
+                            new_state.elephant = candidates[0].clone();
+                            new_state.elephant_minute += second;
+                            result.push(Some(new_state));
+                        }
+                    }
+                    return result;
+                }
+
+                let combis = iproduct!(candidates.clone(), candidates.clone())
+                    .filter(|&(a, b)| a != b)
+                    .collect::<Vec<(&String, &String)>>();
+
+                for (a, b) in combis {
+                    let mut new_state = self.clone();
+                    let (first, _) = weights[&(self.name.clone(), a.clone())];
+                    let (second, _) = weights[&(self.elephant.clone(), b.clone())];
+                    new_state.name = a.clone();
+                    new_state.elephant = b.clone();
+                    new_state.minute += first;
+                    new_state.elephant_minute += second;
+                    result.push(Some(new_state));
+                }
+
+                result
+            }
+            (true, false) => {
+                for valve in can_be_opened.iter() {
+                    if self.closed(valve.as_str()) {
+                        let mut new_state = self.clone();
+                        let (moves, _) = weights[&(self.name.clone(), valve.clone())];
+                        new_state.name = valve.clone();
+                        new_state.minute += moves;
+                        result.push(Some(new_state));
+                    }
+                }
+                result
+            }
+            (false, true) => {
+                for valve in can_be_opened.iter() {
+                    if self.closed(valve.as_str()) {
+                        let mut new_state = self.clone();
+                        let (moves, _) = weights[&(self.elephant.clone(), valve.clone())];
+                        new_state.elephant = valve.clone();
+                        new_state.elephant_minute += moves;
+                        result.push(Some(new_state));
+                    }
+                }
+                result
+            }
+            (false, false) => panic!("invalid state due to previous check"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -236,7 +348,7 @@ fn day16b(path: &str, minutes: u32) -> u32 {
         }
     }
 
-    let mut next_queue = vec![ElephantState{
+    let mut next_queue = vec![ElephantState {
         name: start.name.clone(),
         elephant: start.name.clone(),
         minute: 1,
@@ -245,46 +357,23 @@ fn day16b(path: &str, minutes: u32) -> u32 {
         visited: HashSet::from([start.name.clone()]),
     }];
 
+    let mut best = 0;
     for minute in 1..=minutes {
         let mut queue = next_queue.clone();
         next_queue.clear();
+
         while !queue.is_empty() {
-            let mut next = queue.pop().unwrap();
-            if next.minute > minute || next.visited.is_superset(&can_be_opened) {
-                next_queue.push(next);
-            } else if !next.visited.contains(&next.name) {
-                if next.minute == minutes {
-                    continue;
-                }
-                // open valve
-                next.minute += 1;
-                next.score += (minutes - minute) * scores[next.name.as_str()];
-                next.visited.insert(next.name.clone());
-                next_queue.push(next);
-            } else {
-                // find next move
-                for candidate in can_be_opened.iter() {
-                    if next.visited.contains(candidate) {
-                        continue;
-                    }
-                    let (moves, _) = weights[&(next.name.clone(), candidate.clone())];
-                    let new_state = ElephantState {
-                        name: candidate.clone(),
-                        score: next.score,
-                        elephant: next.elephant.clone(),
-                        elephant_minute: next.elephant_minute,
-                        minute: next.minute + moves,
-                        visited: next.visited.clone(),
-                    };
-                    next_queue.push(new_state);
+            let mut state = queue.pop().unwrap();
+            best = cmp::max(best, state.score);
+
+            state.score(minutes, minute, &scores);
+            for states in state.try_move(minute, &can_be_opened, &weights) {
+                match states {
+                    Some(st) => next_queue.push(st),
+                    None => next_queue.push(state.clone()),
                 }
             }
         }
-    }
-
-    let mut best = 0;
-    for state in next_queue.iter() {
-        best = cmp::max(best, state.score);
     }
 
     best
@@ -310,6 +399,12 @@ mod tests {
     #[test]
     fn find_most_pressure_with_elephant() {
         let actual = day16b("./data/day16.txt", 26);
+        assert_eq!(actual, 1707);
+    }
+
+    #[test]
+    fn find_most_pressure_with_elephant_part_b() {
+        let actual = day16b("./data/day16final.txt", 26);
         assert_eq!(actual, 1707);
     }
 }
