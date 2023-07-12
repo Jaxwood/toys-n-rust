@@ -124,7 +124,7 @@ impl Chamber {
 impl Display for Chamber {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let mut s = String::new();
-        for y in (0..=20).rev() {
+        for y in (0..=self.height).rev() {
             for x in 0..=8 {
                 if (x == 0 || x == 8) && y == 0 {
                     s.push_str("+");
@@ -158,7 +158,7 @@ fn load_bricks() -> Vec<Brick> {
     ]
 }
 
-fn day17a(path: &str, target: usize) -> i32 {
+fn day17a(path: &str, target: usize) -> usize {
     let wind = fs::read_to_string(path)
         .expect("file not found")
         .trim()
@@ -199,7 +199,7 @@ fn day17a(path: &str, target: usize) -> i32 {
         chamber.store_brick(brick);
     }
 
-    chamber.height
+    chamber.height as usize
 }
 
 #[cfg(test)]
@@ -207,14 +207,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn find_most_pressure() {
+    fn find_height() {
         let actual = day17a("./data/day17.txt", 2022);
         assert_eq!(actual, 3068);
     }
 
     #[test]
-    fn find_most_pressure_part_a() {
+    fn find_height_many() {
+        // first 15 bricks is 25 high
+        // every 35 bricks afterwards is a repeating pattern of 53 height
+        // this matches the exact number of turns, e.g. no rest left
+        let actual: i64 = (((1000000000000 - 15) / 35) * 53) + 25;
+        assert_eq!(actual, 1514285714288);
+    }
+
+    #[test]
+    fn find_height_part_a() {
         let actual = day17a("./data/day17final.txt", 2022);
         assert_eq!(actual, 3135);
+    }
+
+    #[test]
+    fn find_height_part_b() {
+        // first 71 bricks is 103 high
+        // every 1745 bricks afterwards is a repeating pattern of 2737 height
+        // for every 1745 bricks, 1 brick is added to the height
+        // rest of 939 bricks with 1464 height
+        let times: i64 = (1000000000000 - 71) / 1745;
+        let start_height = 103;
+        let repeat_height = 2737;
+        let rest_height = 1464;
+        let actual: i64 = (times * repeat_height) + times + start_height + rest_height;
+        assert_eq!(actual, 1569054441243);
     }
 }
