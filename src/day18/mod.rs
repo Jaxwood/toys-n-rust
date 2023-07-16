@@ -1,8 +1,7 @@
 #![allow(dead_code)]
-use std::io::prelude::*;
 use std::{
     collections::{HashSet, VecDeque},
-    fs::{self, File},
+    fs::{self},
 };
 
 use nom::{bytes::complete::tag, character::complete::newline, multi::separated_list1, IResult};
