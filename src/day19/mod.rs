@@ -47,11 +47,43 @@ impl State {
         self.minute += 1;
     }
 
-    fn buy(&self, _blueprint: &Blueprint) -> Vec<Option<Robot>> {
+    fn try_buy(&self, _blueprint: &Blueprint) -> Vec<Option<Robot>> {
         vec![None]
     }
 
-    fn ready(&mut self, robot: Robot) {
+    fn ready(&mut self, robot: Robot, blueprint: &Blueprint) {
+        match robot {
+            Robot::Ore => {
+                blueprint.costs.iter().filter_map(|cost| match cost {
+                    Cost::Ore(ore) => Some(ore),
+                    _ => None,
+                }).for_each(|ore| self.ores -= ore);
+            }
+            Robot::Clay => {
+                blueprint.costs.iter().filter_map(|cost| match cost {
+                    Cost::Clay(ore) => Some(ore),
+                    _ => None,
+                }).for_each(|ore| self.ores -= ore);
+            }
+            Robot::Obsidian => {
+                blueprint.costs.iter().filter_map(|cost| match cost {
+                    Cost::Obsidian(ore, clay) => Some((ore, clay)),
+                    _ => None,
+                }).for_each(|(ore, clay)| {
+                    self.ores -= ore;
+                    self.clays -= clay;
+                });
+            }
+            Robot::Geode => {
+                blueprint.costs.iter().filter_map(|cost| match cost {
+                    Cost::Geode(ore, obsidian) => Some((ore, obsidian)),
+                    _ => None,
+                }).for_each(|(ore, obsidian)| {
+                    self.ores -= ore;
+                    self.obsidians -= obsidian;
+                });
+            }
+        }
         self.robots.push(robot);
     }
 }
@@ -167,7 +199,7 @@ fn day19a(path: &str) -> i32 {
                 continue;
             }
 
-            let robots = state.buy(&blueprint);
+            let robots = state.try_buy(&blueprint);
             state.harvest();
 
             for robot in robots {
@@ -175,7 +207,7 @@ fn day19a(path: &str) -> i32 {
                     None => queue.push(state.clone()),
                     Some(robot) => {
                         let mut new_state = state.clone();
-                        new_state.ready(robot);
+                        new_state.ready(robot, &blueprint);
                         queue.push(new_state);
                     },
                 }
