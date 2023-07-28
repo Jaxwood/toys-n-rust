@@ -49,25 +49,25 @@ fn parse_clay(input: &str) -> IResult<&str, Robot> {
 }
 
 fn parse_obsidian(input: &str) -> IResult<&str, Robot> {
-    let (input, (_, obsidian_ore, _, obsidian_clay, _)) = tuple((
+    let (input, (_, ore, _, clay, _)) = tuple((
         tag("Each obsidian robot costs "),
         nom::character::complete::i32,
         tag(" ore and "),
         nom::character::complete::i32,
         tag(" clay. "),
     ))(input)?;
-    Ok((input, Robot::Obsidian(obsidian_ore, obsidian_clay)))
+    Ok((input, Robot::Obsidian(ore, clay)))
 }
 
 fn parse_geode(input: &str) -> IResult<&str, Robot> {
-    let (input, (_, geode_ore, _, geode_obsidian, _)) = tuple((
+    let (input, (_, ore, _, obsidian, _)) = tuple((
         tag("Each geode robot costs "),
         nom::character::complete::i32,
         tag(" ore and "),
         nom::character::complete::i32,
         tag(" obsidian."),
     ))(input)?;
-    Ok((input, Robot::Geode(geode_ore, geode_obsidian)))
+    Ok((input, Robot::Geode(ore, obsidian)))
 }
 
 fn parse_blueprint(input: &str) -> IResult<&str, Blueprint> {
