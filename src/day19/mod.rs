@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{fs, cmp};
+use std::{cmp, fs, iter::once};
 
 use nom::{
     bytes::complete::tag, character::complete::newline, multi::separated_list1, sequence::tuple,
@@ -36,6 +36,8 @@ impl State {
     }
 
     fn harvest(&mut self) {
+        self.minute += 1;
+
         for robot in &self.robots {
             match robot {
                 Robot::Ore => self.ores += 1,
@@ -44,47 +46,109 @@ impl State {
                 Robot::Geode => self.geodes += 1,
             }
         }
-        self.minute += 1;
     }
 
-    fn try_buy(&self, _blueprint: &Blueprint) -> Vec<Option<Robot>> {
-        vec![None]
+    fn count(&self, robot: &Robot) -> i32 {
+        self.robots.iter().fold(0, |acc, r| {
+            match (robot, r) {
+                (Robot::Ore, Robot::Ore) => acc + 1,
+                (Robot::Clay, Robot::Clay) => acc + 1,
+                (Robot::Obsidian, Robot::Obsidian) => acc + 1,
+                (Robot::Geode, Robot::Geode) => acc + 1,
+                _ => acc,
+            }
+        })
     }
 
-    fn ready(&mut self, robot: Robot, blueprint: &Blueprint) {
+    fn try_buy(&self, blueprint: &Blueprint) -> Vec<Option<Robot>> {
+        blueprint
+            .costs
+            .iter()
+            .filter_map(|cost| match cost {
+                Cost::Ore(ore) => {
+                    if self.ores >= *ore && self.count(&Robot::Ore) < 4 {
+                        Some(Robot::Ore)
+                    } else {
+                        None
+                    }
+                }
+                Cost::Clay(ore) => {
+                    if self.ores >= *ore && self.count(&Robot::Clay) < 5 {
+                        Some(Robot::Clay)
+                    } else {
+                        None
+                    }
+                }
+                Cost::Obsidian(ore, clay) => {
+                    if self.ores >= *ore && self.clays >= *clay {
+                        Some(Robot::Obsidian)
+                    } else {
+                        None
+                    }
+                }
+                Cost::Geode(ore, obsidian) => {
+                    if self.ores >= *ore && self.obsidians >= *obsidian {
+                        Some(Robot::Geode)
+                    } else {
+                        None
+                    }
+                }
+            })
+            .map(|robot| Some(robot))
+            .chain(once(None))
+            .collect::<Vec<_>>()
+    }
+
+    fn ready(&mut self, robot: &Robot, blueprint: &Blueprint) {
         match robot {
             Robot::Ore => {
-                blueprint.costs.iter().filter_map(|cost| match cost {
-                    Cost::Ore(ore) => Some(ore),
-                    _ => None,
-                }).for_each(|ore| self.ores -= ore);
+                blueprint
+                    .costs
+                    .iter()
+                    .filter_map(|cost| match cost {
+                        Cost::Ore(ore) => Some(ore),
+                        _ => None,
+                    })
+                    .for_each(|ore| self.ores -= ore);
             }
             Robot::Clay => {
-                blueprint.costs.iter().filter_map(|cost| match cost {
-                    Cost::Clay(ore) => Some(ore),
-                    _ => None,
-                }).for_each(|ore| self.ores -= ore);
+                blueprint
+                    .costs
+                    .iter()
+                    .filter_map(|cost| match cost {
+                        Cost::Clay(ore) => Some(ore),
+                        _ => None,
+                    })
+                    .for_each(|ore| self.ores -= ore);
             }
             Robot::Obsidian => {
-                blueprint.costs.iter().filter_map(|cost| match cost {
-                    Cost::Obsidian(ore, clay) => Some((ore, clay)),
-                    _ => None,
-                }).for_each(|(ore, clay)| {
-                    self.ores -= ore;
-                    self.clays -= clay;
-                });
+                blueprint
+                    .costs
+                    .iter()
+                    .filter_map(|cost| match cost {
+                        Cost::Obsidian(ore, clay) => Some((ore, clay)),
+                        _ => None,
+                    })
+                    .for_each(|(ore, clay)| {
+                        self.ores -= ore;
+                        self.clays -= clay;
+                    });
             }
             Robot::Geode => {
-                blueprint.costs.iter().filter_map(|cost| match cost {
-                    Cost::Geode(ore, obsidian) => Some((ore, obsidian)),
-                    _ => None,
-                }).for_each(|(ore, obsidian)| {
-                    self.ores -= ore;
-                    self.obsidians -= obsidian;
-                });
+                blueprint
+                    .costs
+                    .iter()
+                    .filter_map(|cost| match cost {
+                        Cost::Geode(ore, obsidian) => Some((ore, obsidian)),
+                        _ => None,
+                    })
+                    .for_each(|(ore, obsidian)| {
+                        self.ores -= ore;
+                        self.obsidians -= obsidian;
+                    });
             }
         }
-        self.robots.push(robot);
+        self.robots.push(robot.clone());
     }
 }
 
@@ -167,11 +231,7 @@ fn parse_blueprint(input: &str) -> IResult<&str, Blueprint> {
         input,
         Blueprint {
             id,
-            costs: vec![
-            ore,
-            clay,
-            obsidian,
-            geode],
+            costs: vec![ore, clay, obsidian, geode],
         },
     ))
 }
@@ -186,33 +246,31 @@ fn day19a(path: &str) -> i32 {
     let (_, blueprints) = parse(&content).unwrap();
     let mut quality_level = 0;
 
-    for blueprint in blueprints {
+    for blueprint in blueprints.iter().skip(1) {
         let state = State::default();
         let mut queue = vec![state];
         let mut best = 0;
 
         while !queue.is_empty() {
             let mut state = queue.pop().unwrap();
+            let robots = state.try_buy(blueprint);
+            state.harvest();
 
             if state.is_done() {
                 best = cmp::max(best, state.geodes);
                 continue;
             }
 
-            let robots = state.try_buy(&blueprint);
-            state.harvest();
-
-            for robot in robots {
+            for robot in robots.iter() {
                 match robot {
                     None => queue.push(state.clone()),
                     Some(robot) => {
                         let mut new_state = state.clone();
-                        new_state.ready(robot, &blueprint);
+                        new_state.ready(robot, blueprint);
                         queue.push(new_state);
-                    },
+                    }
                 }
             }
-
         }
         quality_level += best * blueprint.id;
     }
