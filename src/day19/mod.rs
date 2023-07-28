@@ -7,29 +7,25 @@ use nom::{
     IResult,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct State {
-    id: i32,
     minute: i32,
     robots: Vec<Robot>,
     ores: i32,
     clays: i32,
     obsidians: i32,
     geodes: i32,
-    total: i32,
 }
 
 impl Default for State {
     fn default() -> Self {
         State {
-            id: 0,
             minute: 0,
             robots: vec![Robot::Ore],
             ores: 0,
             clays: 0,
             obsidians: 0,
             geodes: 0,
-            total: 0,
         }
     }
 }
@@ -51,8 +47,8 @@ impl State {
         self.minute += 1;
     }
 
-    fn buy(&self) -> Option<Robot> {
-        None
+    fn buy(&self, _blueprint: &Blueprint) -> Vec<Option<Robot>> {
+        vec![None]
     }
 
     fn ready(&mut self, robot: Robot) {
@@ -60,7 +56,7 @@ impl State {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Robot {
     Ore,
     Clay,
@@ -159,27 +155,32 @@ fn day19a(path: &str) -> i32 {
     let mut quality_level = 0;
 
     for blueprint in blueprints {
-        let mut state = State::default();
-        state.id = blueprint.id;
+        let state = State::default();
         let mut queue = vec![state];
         let mut best = 0;
 
         while !queue.is_empty() {
             let mut state = queue.pop().unwrap();
 
-            let robot = state.buy();
+            if state.is_done() {
+                best = cmp::max(best, state.geodes);
+                continue;
+            }
+
+            let robots = state.buy(&blueprint);
             state.harvest();
 
-            match robot {
-                None => (),
-                Some(robot) => {
-                    state.ready(robot)
-                },
+            for robot in robots {
+                match robot {
+                    None => queue.push(state.clone()),
+                    Some(robot) => {
+                        let mut new_state = state.clone();
+                        new_state.ready(robot);
+                        queue.push(new_state);
+                    },
+                }
             }
 
-            if state.is_done() {
-                best = cmp::max(best, state.total);
-            }
         }
         quality_level += best * blueprint.id;
     }
