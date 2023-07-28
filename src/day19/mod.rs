@@ -246,7 +246,7 @@ fn day19a(path: &str) -> i32 {
     let (_, blueprints) = parse(&content).unwrap();
     let mut quality_level = 0;
 
-    for blueprint in blueprints.iter().skip(1) {
+    for blueprint in blueprints.iter() {
         let state = State::default();
         let mut queue = vec![state];
         let mut best = 0;
