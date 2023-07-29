@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
-use std::{cmp, fs, iter::once};
+use rayon::prelude::*;
+use std::{cmp, collections::{HashSet}, fs, iter::once};
 
 use nom::{
     bytes::complete::tag, character::complete::newline, multi::separated_list1, sequence::tuple,
@@ -15,6 +16,27 @@ struct State {
     clays: i32,
     obsidians: i32,
     geodes: i32,
+}
+
+impl ToString for State {
+    fn to_string(&self) -> String {
+        let ore_robots = self.count(&Robot::Ore);
+        let clay_robots = self.count(&Robot::Clay);
+        let obisidian_robots = self.count(&Robot::Obsidian);
+        let geode_robots = self.count(&Robot::Geode);
+        format!(
+            "{}{}{}{}{}{}{}{}{}",
+            self.minute,
+            self.ores,
+            self.clays,
+            self.obsidians,
+            self.geodes,
+            ore_robots,
+            clay_robots,
+            obisidian_robots,
+            geode_robots
+        )
+    }
 }
 
 impl Default for State {
@@ -49,14 +71,12 @@ impl State {
     }
 
     fn count(&self, robot: &Robot) -> i32 {
-        self.robots.iter().fold(0, |acc, r| {
-            match (robot, r) {
-                (Robot::Ore, Robot::Ore) => acc + 1,
-                (Robot::Clay, Robot::Clay) => acc + 1,
-                (Robot::Obsidian, Robot::Obsidian) => acc + 1,
-                (Robot::Geode, Robot::Geode) => acc + 1,
-                _ => acc,
-            }
+        self.robots.iter().fold(0, |acc, r| match (robot, r) {
+            (Robot::Ore, Robot::Ore) => acc + 1,
+            (Robot::Clay, Robot::Clay) => acc + 1,
+            (Robot::Obsidian, Robot::Obsidian) => acc + 1,
+            (Robot::Geode, Robot::Geode) => acc + 1,
+            _ => acc,
         })
     }
 
@@ -66,14 +86,14 @@ impl State {
             .iter()
             .filter_map(|cost| match cost {
                 Cost::Ore(ore) => {
-                    if self.ores >= *ore && self.count(&Robot::Ore) < 4 {
+                    if self.ores >= *ore && self.count(&Robot::Ore) < 5 {
                         Some(Robot::Ore)
                     } else {
                         None
                     }
                 }
                 Cost::Clay(ore) => {
-                    if self.ores >= *ore && self.count(&Robot::Clay) < 5 {
+                    if self.ores >= *ore && self.count(&Robot::Clay) < 10 {
                         Some(Robot::Clay)
                     } else {
                         None
@@ -244,15 +264,22 @@ fn parse(input: &str) -> IResult<&str, Vec<Blueprint>> {
 fn day19a(path: &str) -> i32 {
     let content = fs::read_to_string(path).expect("file not found");
     let (_, blueprints) = parse(&content).unwrap();
-    let mut quality_level = 0;
 
-    for blueprint in blueprints.iter() {
+    blueprints.par_iter().map(|blueprint| {
         let state = State::default();
         let mut queue = vec![state];
         let mut best = 0;
+        let mut visited: HashSet<String> = HashSet::new();
 
         while !queue.is_empty() {
             let mut state = queue.pop().unwrap();
+            let key = state.to_string();
+            if visited.contains(&key) {
+                continue;
+            } else {
+                visited.insert(key);
+            }
+
             let robots = state.try_buy(blueprint);
             state.harvest();
 
@@ -272,10 +299,8 @@ fn day19a(path: &str) -> i32 {
                 }
             }
         }
-        quality_level += best * blueprint.id;
-    }
-
-    quality_level
+        best * blueprint.id
+    }).sum()
 }
 
 #[cfg(test)]
@@ -287,5 +312,11 @@ mod tests {
     fn find_quality_level() {
         let actual = day19a("./data/day19.txt");
         assert_eq!(actual, 33);
+    }
+
+    #[test]
+    fn find_quality_level_part_a() {
+        let actual = day19a("./data/day19final.txt");
+        assert_eq!(actual, 1023);
     }
 }
