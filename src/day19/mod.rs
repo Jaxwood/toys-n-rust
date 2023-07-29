@@ -11,7 +11,10 @@ use nom::{
 #[derive(Debug, Clone)]
 struct State {
     minute: i32,
-    robots: Vec<Robot>,
+    ore_robots: Vec<Robot>,
+    clay_robots: Vec<Robot>,
+    obsidian_robots: Vec<Robot>,
+    geode_robots: Vec<Robot>,
     ores: i32,
     clays: i32,
     obsidians: i32,
@@ -20,10 +23,6 @@ struct State {
 
 impl ToString for State {
     fn to_string(&self) -> String {
-        let ore_robots = self.count(&Robot::Ore);
-        let clay_robots = self.count(&Robot::Clay);
-        let obisidian_robots = self.count(&Robot::Obsidian);
-        let geode_robots = self.count(&Robot::Geode);
         format!(
             "{}{}{}{}{}{}{}{}{}",
             self.minute,
@@ -31,10 +30,10 @@ impl ToString for State {
             self.clays,
             self.obsidians,
             self.geodes,
-            ore_robots,
-            clay_robots,
-            obisidian_robots,
-            geode_robots
+            self.ore_robots.len(),
+            self.clay_robots.len(),
+            self.obsidian_robots.len(),
+            self.geode_robots.len(),
         )
     }
 }
@@ -43,7 +42,10 @@ impl Default for State {
     fn default() -> Self {
         State {
             minute: 0,
-            robots: vec![Robot::Ore],
+            ore_robots: vec![Robot::Ore],
+            clay_robots: vec![],
+            obsidian_robots: vec![],
+            geode_robots: vec![],
             ores: 0,
             clays: 0,
             obsidians: 0,
@@ -60,24 +62,10 @@ impl State {
     fn harvest(&mut self) {
         self.minute += 1;
 
-        for robot in &self.robots {
-            match robot {
-                Robot::Ore => self.ores += 1,
-                Robot::Clay => self.clays += 1,
-                Robot::Obsidian => self.obsidians += 1,
-                Robot::Geode => self.geodes += 1,
-            }
-        }
-    }
-
-    fn count(&self, robot: &Robot) -> i32 {
-        self.robots.iter().fold(0, |acc, r| match (robot, r) {
-            (Robot::Ore, Robot::Ore) => acc + 1,
-            (Robot::Clay, Robot::Clay) => acc + 1,
-            (Robot::Obsidian, Robot::Obsidian) => acc + 1,
-            (Robot::Geode, Robot::Geode) => acc + 1,
-            _ => acc,
-        })
+        self.ores += self.ore_robots.len() as i32;
+        self.clays += self.clay_robots.len() as i32;
+        self.obsidians += self.obsidian_robots.len() as i32;
+        self.geodes += self.geode_robots.len() as i32;
     }
 
     fn try_buy(&self, blueprint: &Blueprint) -> Vec<Option<Robot>> {
@@ -86,14 +74,14 @@ impl State {
             .iter()
             .filter_map(|cost| match cost {
                 Cost::Ore(ore) => {
-                    if self.ores >= *ore && self.count(&Robot::Ore) < 5 {
+                    if self.ores >= *ore && self.ore_robots.len() < 5 {
                         Some(Robot::Ore)
                     } else {
                         None
                     }
                 }
                 Cost::Clay(ore) => {
-                    if self.ores >= *ore && self.count(&Robot::Clay) < 10 {
+                    if self.ores >= *ore && self.clay_robots.len() < 10 {
                         Some(Robot::Clay)
                     } else {
                         None
@@ -130,6 +118,7 @@ impl State {
                         _ => None,
                     })
                     .for_each(|ore| self.ores -= ore);
+                    self.ore_robots.push(robot.clone());
             }
             Robot::Clay => {
                 blueprint
@@ -140,6 +129,7 @@ impl State {
                         _ => None,
                     })
                     .for_each(|ore| self.ores -= ore);
+                    self.clay_robots.push(robot.clone());
             }
             Robot::Obsidian => {
                 blueprint
@@ -153,6 +143,7 @@ impl State {
                         self.ores -= ore;
                         self.clays -= clay;
                     });
+                    self.obsidian_robots.push(robot.clone());
             }
             Robot::Geode => {
                 blueprint
@@ -166,9 +157,9 @@ impl State {
                         self.ores -= ore;
                         self.obsidians -= obsidian;
                     });
+                    self.geode_robots.push(robot.clone());
             }
         }
-        self.robots.push(robot.clone());
     }
 }
 
