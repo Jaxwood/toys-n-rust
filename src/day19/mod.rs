@@ -1,12 +1,7 @@
 #![allow(dead_code)]
 
 use rayon::prelude::*;
-use std::{
-    cmp,
-    collections::{HashMap, HashSet},
-    fs,
-    iter::once,
-};
+use std::{cmp, collections::{HashSet, HashMap}, fs, iter::once};
 
 use nom::{
     bytes::complete::tag, character::complete::newline, multi::separated_list1, sequence::tuple,
@@ -123,7 +118,7 @@ impl State {
                         _ => None,
                     })
                     .for_each(|ore| self.ores -= ore);
-                self.ore_robots.push(robot.clone());
+                    self.ore_robots.push(robot.clone());
             }
             Robot::Clay => {
                 blueprint
@@ -134,7 +129,7 @@ impl State {
                         _ => None,
                     })
                     .for_each(|ore| self.ores -= ore);
-                self.clay_robots.push(robot.clone());
+                    self.clay_robots.push(robot.clone());
             }
             Robot::Obsidian => {
                 blueprint
@@ -148,7 +143,7 @@ impl State {
                         self.ores -= ore;
                         self.clays -= clay;
                     });
-                self.obsidian_robots.push(robot.clone());
+                    self.obsidian_robots.push(robot.clone());
             }
             Robot::Geode => {
                 blueprint
@@ -162,7 +157,7 @@ impl State {
                         self.ores -= ore;
                         self.obsidians -= obsidian;
                     });
-                self.geode_robots.push(robot.clone());
+                    self.geode_robots.push(robot.clone());
             }
         }
     }
@@ -261,45 +256,42 @@ fn day19a(path: &str, minutes: i32) -> i32 {
     let content = fs::read_to_string(path).expect("file not found");
     let (_, blueprints) = parse(&content).unwrap();
 
-    blueprints
-        .par_iter()
-        .map(|blueprint| {
-            let state = State::default();
-            let mut queue = vec![state];
-            let mut best = 0;
-            let mut visited: HashSet<String> = HashSet::new();
+    blueprints.par_iter().map(|blueprint| {
+        let state = State::default();
+        let mut queue = vec![state];
+        let mut best = 0;
+        let mut visited: HashSet<String> = HashSet::new();
 
-            while !queue.is_empty() {
-                let mut state = queue.pop().unwrap();
-                let key = state.to_string();
-                if visited.contains(&key) {
-                    continue;
-                } else {
-                    visited.insert(key);
-                }
+        while !queue.is_empty() {
+            let mut state = queue.pop().unwrap();
+            let key = state.to_string();
+            if visited.contains(&key) {
+                continue;
+            } else {
+                visited.insert(key);
+            }
 
-                let robots = state.try_buy(blueprint);
-                state.harvest();
+            let robots = state.try_buy(blueprint);
+            state.harvest();
 
-                if state.is_done(minutes) {
-                    best = cmp::max(best, state.geodes);
-                    continue;
-                }
+            if state.is_done(minutes) {
+                best = cmp::max(best, state.geodes);
+                continue;
+            }
 
-                for robot in robots.iter() {
-                    match robot {
-                        None => queue.push(state.clone()),
-                        Some(robot) => {
-                            let mut new_state = state.clone();
-                            new_state.ready(robot, blueprint);
-                            queue.push(new_state);
-                        }
+            for robot in robots.iter() {
+                match robot {
+                    None => queue.push(state.clone()),
+                    Some(robot) => {
+                        let mut new_state = state.clone();
+                        new_state.ready(robot, blueprint);
+                        queue.push(new_state);
                     }
                 }
             }
-            best * blueprint.id
-        })
-        .sum()
+        }
+        best * blueprint.id
+    }).sum()
 }
 
 fn day19b(path: &str, minutes: i32) -> i32 {
@@ -307,53 +299,47 @@ fn day19b(path: &str, minutes: i32) -> i32 {
     let (_, blueprints) = parse(&content).unwrap();
     let first_three = blueprints.iter().take(3).collect::<Vec<_>>();
 
-    first_three
-        .par_iter()
-        .map(|blueprint| {
-            let state = State::default();
-            let mut queue = vec![state];
-            let mut visited: HashSet<String> = HashSet::new();
-            let mut scores: HashMap<i32, i32> = HashMap::new();
+    first_three.par_iter().map(|blueprint| {
+        let state = State::default();
+        let mut queue = vec![state];
+        let mut visited: HashSet<String> = HashSet::new();
+        let mut scores: HashMap<i32, i32> = HashMap::new();
 
-            while !queue.is_empty() {
-                let mut state = queue.pop().unwrap();
-                let key = state.to_string();
-                if visited.contains(&key) {
-                    continue;
-                } else {
-                    visited.insert(key);
-                }
+        while !queue.is_empty() {
+            let mut state = queue.pop().unwrap();
+            let key = state.to_string();
+            if visited.contains(&key) {
+                continue;
+            } else {
+                visited.insert(key);
+            }
 
-                let robots = state.try_buy(blueprint);
-                state.harvest();
+            let robots = state.try_buy(blueprint);
+            state.harvest();
 
-                if state.minute > 24
-                    && scores.contains_key(&state.minute)
-                    && scores.get(&state.minute).unwrap() > &state.geodes
-                {
-                    continue;
-                } else {
-                    scores.insert(state.minute, state.geodes);
-                }
+            if state.minute > 24 && scores.contains_key(&state.minute) && scores.get(&state.minute).unwrap() > &state.geodes {
+                continue;
+            } else {
+                scores.insert(state.minute, state.geodes);
+            }
 
-                if state.is_done(minutes) {
-                    continue;
-                }
+            if state.is_done(minutes) {
+                continue;
+            }
 
-                for robot in robots.iter() {
-                    match robot {
-                        None => queue.push(state.clone()),
-                        Some(robot) => {
-                            let mut new_state = state.clone();
-                            new_state.ready(robot, blueprint);
-                            queue.push(new_state);
-                        }
+            for robot in robots.iter() {
+                match robot {
+                    None => queue.push(state.clone()),
+                    Some(robot) => {
+                        let mut new_state = state.clone();
+                        new_state.ready(robot, blueprint);
+                        queue.push(new_state);
                     }
                 }
             }
-            scores.get(&minutes).unwrap().clone()
-        })
-        .product()
+        }
+        scores.get(&minutes).unwrap().clone()
+    }).product()
 }
 
 #[cfg(test)]
