@@ -21,8 +21,8 @@ fn day20a(path: &str) -> i32 {
     for (idx, &num) in numbers.iter().enumerate() {
         let pos = indexes.iter().position(|&i| i == idx).unwrap();
         indexes.remove(pos);
-        let new_i = (pos as i32 + num).rem_euclid(indexes.len() as i32) as usize;
-        indexes.insert(new_i, idx);
+        let new_idx = (pos as i32 + num).rem_euclid(indexes.len() as i32) as usize;
+        indexes.insert(new_idx, idx);
     }
 
     let zero_idx = numbers.iter().position(|&i| i == 0).unwrap();
