@@ -73,21 +73,26 @@ fn traverse(riddles: &HashMap<String, Riddle>, job: &str) -> i64 {
             let right = traverse(riddles, &right);
             if left > right {
                 -1
-            } else if  left <right {
-                0
-            } else {
+            } else if left < right {
                 1
+            } else {
+                0
             }
         }
     }
 }
 
-fn binary_search(riddles: &mut HashMap<String, Riddle>, job: &str, mut lower: i64, mut upper: i64) -> i64 {
+fn binary_search(
+    riddles: &mut HashMap<String, Riddle>,
+    job: &str,
+    mut lower: i64,
+    mut upper: i64,
+) -> i64 {
     loop {
         let mid = (lower + upper) / 2;
         riddles.insert("humn".to_string(), Riddle::Num(mid));
         let result = traverse(riddles, job);
-        if result == 1 {
+        if result == 0 {
             return mid - 1;
         }
         if result == -1 {
@@ -114,7 +119,10 @@ fn day21b(path: &str, lower: i64, upper: i64) -> i64 {
         Riddle::Subtract(left, right) => (left, right),
         _ => todo!(),
     };
-    riddles.insert("root".to_string(), Riddle::Equal(left.to_string(), right.to_string()));
+    riddles.insert(
+        "root".to_string(),
+        Riddle::Equal(left.to_string(), right.to_string()),
+    );
 
     binary_search(&mut riddles, "root", lower, upper)
 }
@@ -144,7 +152,11 @@ mod tests {
 
     #[test]
     fn solve_riddle_part_b() {
-        let actual = day21b("./data/day21final.txt", 1_000_000_000_000, 30_000_000_000_000);
+        let actual = day21b(
+            "./data/day21final.txt",
+            1_000_000_000_000,
+            30_000_000_000_000,
+        );
         assert_eq!(actual, 3560324848168);
     }
 }
