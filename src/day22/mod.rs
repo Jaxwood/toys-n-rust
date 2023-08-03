@@ -56,20 +56,49 @@ impl Person {
         }
     }
 
-    fn wrap(&self, coord: &Coord) -> Option<Pixel> {
-        match self.facing {
-            Direction::North => {
-                todo!()
-            },
-            Direction::East => {
-                todo!()
-            },
-            Direction::South => {
-                todo!()
-            },
-            Direction::West => {
-                todo!()
-            },
+    fn wrap(&mut self, (x, y): &Coord) {
+        let coord = match self.facing {
+            Direction::North => self
+                .jungle
+                .iter()
+                .filter(|((xx, _), _)| *xx == *x)
+                .filter_map(|(coord, pixel)| match pixel {
+                    Pixel::Open | Pixel::Wall => Some(coord),
+                    _ => None,
+                })
+                .max_by_key(|(_, y)| y),
+            Direction::East => self
+                .jungle
+                .iter()
+                .filter(|((_, yy), _)| *yy == *y)
+                .filter_map(|(coord, pixel)| match pixel {
+                    Pixel::Open | Pixel::Wall => Some(coord),
+                    _ => None,
+                })
+                .min_by_key(|(x, _)| x),
+            Direction::South => self
+                .jungle
+                .iter()
+                .filter(|((xx, _), _)| *xx == *x)
+                .filter_map(|(coord, pixel)| match pixel {
+                    Pixel::Open | Pixel::Wall => Some(coord),
+                    _ => None,
+                })
+                .min_by_key(|(_, y)| y),
+            Direction::West => self
+                .jungle
+                .iter()
+                .filter(|((_, yy), _)| *yy == *y)
+                .filter_map(|(coord, pixel)| match pixel {
+                    Pixel::Open | Pixel::Wall => Some(coord),
+                    _ => None,
+                })
+                .max_by_key(|(x, _)| x),
+        };
+
+        match self.jungle[coord.unwrap()] {
+            Pixel::Open => self.position = *coord.unwrap(),
+            _ => (),
         }
     }
 
@@ -86,22 +115,17 @@ impl Person {
         match next_pixel {
             Some(Pixel::Open) => self.position = next,
             Some(Pixel::Wall) => (),
-            _ => {
-                match self.wrap(&next) {
-                    Some(Pixel::Open) => self.position = next,
-                    _ => (),
-                }
-            },
+            _ => self.wrap(&next),
         }
     }
 
     fn password(&self) -> usize {
-        let (x, y) = self.position;
+        let (column, row) = self.position;
         match self.facing {
-            Direction::East => y * 1000 + x * 4 + 0,
-            Direction::South => y * 1000 + x * 4 + 1,
-            Direction::West => y * 1000 + x * 4 + 2,
-            Direction::North => y * 1000 + x * 4 + 3,
+            Direction::East => row * 1000 + column * 4 + 0,
+            Direction::South => row * 1000 + column * 4 + 1,
+            Direction::West => row * 1000 + column * 4 + 2,
+            Direction::North => row * 1000 + column * 4 + 3,
         }
     }
 }
@@ -156,7 +180,7 @@ fn parse(input: &str) -> IResult<&str, (Vec<Move>, HashMap<Coord, Pixel>)> {
         .enumerate()
         .fold(HashMap::new(), |mut acc, (y, row)| {
             row.iter().enumerate().for_each(|(x, pixel)| {
-                acc.insert((x, y), pixel.clone());
+                acc.insert((x + 1, y + 1), pixel.clone());
             });
             acc
         });
@@ -171,7 +195,7 @@ fn day22a(path: &str) -> usize {
     let (_, (route, jungle)) = parse(&content).unwrap();
     let start = jungle
         .iter()
-        .filter(|((_, y), _)| *y == 0)
+        .filter(|((_, y), _)| *y == 1)
         .filter_map(|(coord, pixel)| match pixel {
             Pixel::Open => Some(coord),
             _ => None,
@@ -205,9 +229,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn find_password_part_a() {
         let actual = day22a("./data/day22final.txt");
-        assert_eq!(actual, 0);
+        assert_eq!(actual, 31568);
     }
 }
