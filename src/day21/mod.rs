@@ -60,11 +60,21 @@ fn parse(input: &str) -> IResult<&str, HashMap<String, Riddle>> {
     Ok((input, riddles))
 }
 
+fn traverse(riddles: &HashMap<String, Riddle>, job: &str) -> i64 {
+    match &riddles[job] {
+        Riddle::Num(num) => *num,
+        Riddle::Add(left, right) => traverse(riddles, &left) + traverse(riddles, &right),
+        Riddle::Multiply(left, right) => traverse(riddles, &left) * traverse(riddles, &right),
+        Riddle::Divide(left, right) => traverse(riddles, &left) / traverse(riddles, &right),
+        Riddle::Subtract(left, right) => traverse(riddles, &left) - traverse(riddles, &right),
+    }
+}
+
 fn day21a(path: &str) -> i64 {
     let content = fs::read_to_string(path).expect("file not found");
     let (_, riddles) = parse(&content).unwrap();
-    println!("{:?}", riddles);
-    0
+    let result = traverse(&riddles, "root");
+    result
 }
 
 #[cfg(test)]
@@ -79,9 +89,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn solve_riddle_part_a() {
         let actual = day21a("./data/day21final.txt");
-        assert_eq!(actual, 0);
+        assert_eq!(actual, 85616733059734);
     }
 }
