@@ -16,6 +16,7 @@ type Coord = (usize, usize);
 struct Person {
     facing: Direction,
     position: Coord,
+    jungle: HashMap<Coord, Pixel>,
 }
 
 #[derive(Debug, Clone)]
@@ -32,11 +33,77 @@ enum Move {
     Forward(i64),
 }
 
+#[derive(Debug)]
 enum Direction {
     North,
     East,
     South,
     West,
+}
+
+impl Person {
+    fn turn(&mut self, towards: &Move) {
+        match (&self.facing, towards) {
+            (Direction::North, Move::Left) => self.facing = Direction::West,
+            (Direction::North, Move::Right) => self.facing = Direction::East,
+            (Direction::East, Move::Left) => self.facing = Direction::North,
+            (Direction::East, Move::Right) => self.facing = Direction::South,
+            (Direction::South, Move::Left) => self.facing = Direction::East,
+            (Direction::South, Move::Right) => self.facing = Direction::West,
+            (Direction::West, Move::Left) => self.facing = Direction::South,
+            (Direction::West, Move::Right) => self.facing = Direction::North,
+            (_, _) => panic!("Unknown turn: {:?} {:?}", self.facing, towards),
+        }
+    }
+
+    fn wrap(&self, coord: &Coord) -> Option<Pixel> {
+        match self.facing {
+            Direction::North => {
+                todo!()
+            },
+            Direction::East => {
+                todo!()
+            },
+            Direction::South => {
+                todo!()
+            },
+            Direction::West => {
+                todo!()
+            },
+        }
+    }
+
+    fn walk(&mut self) {
+        let (x, y) = self.position;
+        let next = match self.facing {
+            Direction::North => (x, y - 1),
+            Direction::East => (x + 1, y),
+            Direction::South => (x, y + 1),
+            Direction::West => (x - 1, y),
+        };
+
+        let next_pixel = self.jungle.get(&next);
+        match next_pixel {
+            Some(Pixel::Open) => self.position = next,
+            Some(Pixel::Wall) => (),
+            _ => {
+                match self.wrap(&next) {
+                    Some(Pixel::Open) => self.position = next,
+                    _ => (),
+                }
+            },
+        }
+    }
+
+    fn password(&self) -> usize {
+        let (x, y) = self.position;
+        match self.facing {
+            Direction::East => y * 1000 + x * 4 + 0,
+            Direction::South => y * 1000 + x * 4 + 1,
+            Direction::West => y * 1000 + x * 4 + 2,
+            Direction::North => y * 1000 + x * 4 + 3,
+        }
+    }
 }
 
 fn parse_jungle(input: &str) -> IResult<&str, Vec<Pixel>> {
@@ -61,10 +128,10 @@ fn parse_jungle(input: &str) -> IResult<&str, Vec<Pixel>> {
 fn parse_direction(input: &str) -> IResult<&str, Vec<Move>> {
     let (input, _) = newline(input)?;
     let (input, _) = newline(input)?;
-    let (input, directions) = many1(pair(complete::i64, alt((tag("R"), tag("L")))))(input)?;
+    let (input, route) = many1(pair(complete::i64, alt((tag("R"), tag("L")))))(input)?;
     let (input, rest) = complete::i64(input)?;
     let (input, _) = newline(input)?;
-    let directions = directions
+    let route = route
         .iter()
         .flat_map(|(steps, direction)| {
             vec![
@@ -78,7 +145,7 @@ fn parse_direction(input: &str) -> IResult<&str, Vec<Move>> {
         })
         .chain(vec![Move::Forward(rest)])
         .collect::<Vec<_>>();
-    Ok((input, directions))
+    Ok((input, route))
 }
 
 fn parse(input: &str) -> IResult<&str, (Vec<Move>, HashMap<Coord, Pixel>)> {
@@ -94,14 +161,14 @@ fn parse(input: &str) -> IResult<&str, (Vec<Move>, HashMap<Coord, Pixel>)> {
             acc
         });
 
-    let (input, directions) = parse_direction(input)?;
+    let (input, route) = parse_direction(input)?;
 
-    Ok((input, (directions, jungle)))
+    Ok((input, (route, jungle)))
 }
 
-fn day22a(path: &str) -> i64 {
+fn day22a(path: &str) -> usize {
     let content = fs::read_to_string(path).expect("file not found");
-    let (_, (directions, jungle)) = parse(&content).unwrap();
+    let (_, (route, jungle)) = parse(&content).unwrap();
     let start = jungle
         .iter()
         .filter(|((_, y), _)| *y == 0)
@@ -115,9 +182,15 @@ fn day22a(path: &str) -> i64 {
     let mut santa = Person {
         facing: Direction::East,
         position: start.clone(),
+        jungle,
     };
 
-    0
+    route.iter().for_each(|direction| match direction {
+        Move::Left | Move::Right => santa.turn(direction),
+        Move::Forward(steps) => (0..*steps).for_each(|_| santa.walk()),
+    });
+
+    santa.password()
 }
 
 #[cfg(test)]
