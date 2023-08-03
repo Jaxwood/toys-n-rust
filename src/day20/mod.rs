@@ -70,7 +70,6 @@ mod tests {
     #[test]
     fn find_groove_coordinates_part_a() {
         let actual = day20a("./data/day20final.txt");
-        // not correct
         assert_eq!(actual, 2275);
     }
 
