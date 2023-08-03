@@ -4,14 +4,21 @@ use std::{collections::HashMap, fs};
 
 use nom::{
     branch::alt,
+    bytes::complete::tag,
     character::complete::{self, newline},
     multi::{many1, separated_list1},
-    IResult, sequence::pair, bytes::complete::tag,
+    sequence::pair,
+    IResult,
 };
 
 type Coord = (usize, usize);
 
-#[derive(Debug, Clone, PartialEq)]
+struct Person {
+    facing: Direction,
+    position: Coord,
+}
+
+#[derive(Debug, Clone)]
 enum Pixel {
     Open,
     Void,
@@ -57,15 +64,20 @@ fn parse_direction(input: &str) -> IResult<&str, Vec<Move>> {
     let (input, directions) = many1(pair(complete::i64, alt((tag("R"), tag("L")))))(input)?;
     let (input, rest) = complete::i64(input)?;
     let (input, _) = newline(input)?;
-    let directions = directions.iter().flat_map(|(steps, direction)| {
-        vec![Move::Forward(*steps), match direction {
-            &"R" => Move::Right,
-            &"L" => Move::Left,
-            _ => panic!("Unknown direction: {}", direction),
-        }]
-    })
-    .chain(vec![Move::Forward(rest)])
-    .collect::<Vec<_>>();
+    let directions = directions
+        .iter()
+        .flat_map(|(steps, direction)| {
+            vec![
+                Move::Forward(*steps),
+                match direction {
+                    &"R" => Move::Right,
+                    &"L" => Move::Left,
+                    _ => panic!("Unknown direction: {}", direction),
+                },
+            ]
+        })
+        .chain(vec![Move::Forward(rest)])
+        .collect::<Vec<_>>();
     Ok((input, directions))
 }
 
@@ -89,7 +101,21 @@ fn parse(input: &str) -> IResult<&str, (Vec<Move>, HashMap<Coord, Pixel>)> {
 
 fn day22a(path: &str) -> i64 {
     let content = fs::read_to_string(path).expect("file not found");
-    let (_, _map) = parse(&content).unwrap();
+    let (_, (directions, jungle)) = parse(&content).unwrap();
+    let start = jungle
+        .iter()
+        .filter(|((_, y), _)| *y == 0)
+        .filter_map(|(coord, pixel)| match pixel {
+            Pixel::Open => Some(coord),
+            _ => None,
+        })
+        .min_by_key(|(x, _)| x)
+        .unwrap();
+
+    let mut santa = Person {
+        facing: Direction::East,
+        position: start.clone(),
+    };
 
     0
 }
