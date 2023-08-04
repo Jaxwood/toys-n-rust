@@ -17,6 +17,7 @@ struct Person {
     facing: Direction,
     position: Coord,
     jungle: HashMap<Coord, Pixel>,
+    is_cube: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -102,6 +103,10 @@ impl Person {
         }
     }
 
+    fn wrap_cube(&self, (x, y): &Coord) {
+        todo!()
+    }
+
     fn walk(&mut self) {
         let (x, y) = self.position;
         let next = match self.facing {
@@ -115,7 +120,13 @@ impl Person {
         match next_pixel {
             Some(Pixel::Open) => self.position = next,
             Some(Pixel::Wall) => (),
-            _ => self.wrap(&next),
+            _ => {
+                if self.is_cube {
+                    self.wrap_cube(&next);
+                } else {
+                    self.wrap(&next);
+                }
+            }
         }
     }
 
@@ -127,6 +138,20 @@ impl Person {
             Direction::West => row * 1000 + column * 4 + 2,
             Direction::North => row * 1000 + column * 4 + 3,
         }
+    }
+
+    fn cube_size(&self) -> usize {
+        f64::sqrt(
+            (self
+                .jungle
+                .iter()
+                .filter(|(_, pixel)| match pixel {
+                    Pixel::Void => false,
+                    _ => true,
+                })
+                .count()
+                / 6) as f64,
+        ) as usize
     }
 }
 
@@ -190,7 +215,7 @@ fn parse(input: &str) -> IResult<&str, (Vec<Move>, HashMap<Coord, Pixel>)> {
     Ok((input, (route, jungle)))
 }
 
-fn day22a(path: &str) -> usize {
+fn day22(path: &str, is_cube: bool) -> usize {
     let content = fs::read_to_string(path).expect("file not found");
     let (_, (route, jungle)) = parse(&content).unwrap();
     let start = jungle
@@ -207,6 +232,7 @@ fn day22a(path: &str) -> usize {
         facing: Direction::East,
         position: start.clone(),
         jungle,
+        is_cube,
     };
 
     route.iter().for_each(|direction| match direction {
@@ -224,13 +250,19 @@ mod tests {
 
     #[test]
     fn find_password() {
-        let actual = day22a("./data/day22.txt");
+        let actual = day22("./data/day22.txt", false);
         assert_eq!(actual, 6032);
     }
 
     #[test]
+    fn find_cube_password() {
+        let actual = day22("./data/day22.txt", true);
+        assert_eq!(actual, 5031);
+    }
+
+    #[test]
     fn find_password_part_a() {
-        let actual = day22a("./data/day22final.txt");
+        let actual = day22("./data/day22final.txt", false);
         assert_eq!(actual, 31568);
     }
 }
