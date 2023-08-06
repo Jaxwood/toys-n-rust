@@ -12,6 +12,7 @@ use nom::{
 };
 
 type Coord = (usize, usize);
+type Coord3D = (usize, usize, usize);
 
 struct Person {
     facing: Direction,
@@ -155,6 +156,32 @@ impl Person {
     }
 }
 
+fn parse_cube(quadrant_size: usize, jungle: HashMap<Coord, Pixel>) -> Vec<Vec<Coord>> {
+    let width = jungle.iter().map(|((x, _), _)| x).max().unwrap();
+    let height = jungle.iter().map(|((_, y), _)| y).max().unwrap();
+
+    let mut quadrants = vec![];
+    for _ in 0..12 {
+        quadrants.push(vec![]);
+    }
+
+    for y in 0..*height {
+        for x in 0..*width {
+            let idx = (x as f64).div_euclid(quadrant_size as f64)
+                + ((y as f64).div_euclid(quadrant_size as f64) * (width / quadrant_size) as f64);
+            let coord = (x + 1, y + 1);
+            match jungle.get(&coord) {
+                Some(Pixel::Void) | None => (),
+                _ => {
+                    quadrants[idx as usize].push(coord);
+                }
+            }
+        }
+    }
+
+    quadrants
+}
+
 fn parse_jungle(input: &str) -> IResult<&str, Vec<Pixel>> {
     let (input, pixels) = many1(alt((
         complete::char(' '),
@@ -234,6 +261,10 @@ fn day22(path: &str, is_cube: bool) -> usize {
         jungle,
         is_cube,
     };
+
+    if is_cube {
+        parse_cube(santa.cube_size(), santa.jungle.clone());
+    }
 
     route.iter().for_each(|direction| match direction {
         Move::Left | Move::Right => santa.turn(direction),
