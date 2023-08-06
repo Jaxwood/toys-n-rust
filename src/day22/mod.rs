@@ -119,11 +119,19 @@ impl Person {
         }
     }
 
-    fn wrap_cube(&self, (x, y): &Coord) {
-        todo!()
+    fn wrap_cube(&mut self, (x, y): &Coord, cube: &HashMap<Coord, Coord3D>) {
+        //if let Some(result) = cube.get(&(11, 12)) {
+        if let Some(result) = cube.get(&(12, 6)) {
+            let others = cube
+                .iter()
+                .filter(|(_, (xx, yy, zz))| *xx == result.0 && *yy == result.1 && *zz == result.2)
+                .map(|(x,_)| x)
+                .collect::<Vec<_>>();
+            println!("{:?} {:?}", (x,y), others);
+        }
     }
 
-    fn walk(&mut self) {
+    fn walk(&mut self, cube: &HashMap<Coord, Coord3D>) {
         let (x, y) = self.position;
         let next = match self.facing {
             Direction::North => (x, y - 1),
@@ -138,7 +146,7 @@ impl Person {
             Some(Pixel::Wall) => (),
             _ => {
                 if self.is_cube {
-                    self.wrap_cube(&next);
+                    self.wrap_cube(&(x, y), cube);
                 } else {
                     self.wrap(&next);
                 }
@@ -169,6 +177,154 @@ impl Person {
                 / 6) as f64,
         ) as usize
     }
+
+    fn fold(&self) -> HashMap<Coord, Coord3D> {
+        let mut cube = HashMap::new();
+        let width = self.jungle.iter().map(|((x, _), _)| x).max().unwrap();
+        let height = self.jungle.iter().map(|((_, y), _)| y).max().unwrap();
+        let quadrant_size = self.cube_size();
+        let quadrant_width = width / quadrant_size;
+
+        let mut quadrants = (0..12).fold(vec![], |mut acc, _| {
+            acc.push(vec![]);
+            acc
+        });
+
+        for y in 0..*height {
+            for x in 0..*width {
+                let idx = ((x as f64).div_euclid(quadrant_size as f64)
+                    + ((y as f64).div_euclid(quadrant_size as f64) * quadrant_width as f64))
+                    as usize;
+                let coord = (x + 1, y + 1);
+                match self.jungle.get(&coord) {
+                    Some(Pixel::Void) | None => (),
+                    _ => {
+                        quadrants[idx].push(coord);
+                    }
+                }
+            }
+        }
+
+        // find top
+        let sides = (0..6)
+            .map(|x| (x, x + quadrant_width, x + quadrant_width + quadrant_width))
+            .collect::<Vec<_>>();
+
+        for (x, y, z) in sides {
+            if !quadrants[x].is_empty() && !quadrants[y].is_empty() && !quadrants[z].is_empty() {
+                cube.insert(CubeSide::Back(x), quadrants[x].clone());
+                cube.insert(CubeSide::Top(y), quadrants[y].clone());
+                cube.insert(CubeSide::Front(z), quadrants[z].clone());
+                // left
+                if !quadrants[x - 1].is_empty() {
+                    cube.insert(CubeSide::Left(x - 1), quadrants[x - 1].clone());
+                } else if !quadrants[y - 1].is_empty() {
+                    cube.insert(CubeSide::Left(y - 1), quadrants[y - 1].clone());
+                } else if !quadrants[z - 1].is_empty() {
+                    cube.insert(CubeSide::Left(z - 1), quadrants[z - 1].clone());
+                }
+                // right
+                if !quadrants[x + 1].is_empty() {
+                    cube.insert(CubeSide::Right(x + 1), quadrants[x + 1].clone());
+                } else if !quadrants[y + 1].is_empty() {
+                    cube.insert(CubeSide::Right(y + 1), quadrants[y + 1].clone());
+                } else if !quadrants[z + 1].is_empty() {
+                    cube.insert(CubeSide::Right(z + 1), quadrants[z + 1].clone());
+                }
+            }
+        }
+
+        let idxs: HashSet<usize> = cube
+            .keys()
+            .map(|side| match side {
+                CubeSide::Back(x) => *x,
+                CubeSide::Top(x) => *x,
+                CubeSide::Front(x) => *x,
+                CubeSide::Left(x) => *x,
+                CubeSide::Right(x) => *x,
+                CubeSide::Bottom(x) => *x,
+            })
+            .collect();
+        for bottom in 0..12 {
+            if !idxs.contains(&bottom) && !quadrants[bottom].is_empty() {
+                cube.insert(CubeSide::Bottom(bottom), quadrants[bottom].clone());
+            }
+        }
+
+        let top_coords = cube
+            .iter()
+            .filter_map(|(side, coords)| match side {
+                CubeSide::Top(_) => Some(coords.clone()),
+                _ => None,
+            })
+            .flatten()
+            .collect::<Vec<Coord>>();
+
+        let mut transform = HashMap::new();
+        let (min_x, max_x, min_y, max_y) = boundaries(&top_coords);
+
+        for (side, pixels) in cube.iter() {
+            match side {
+                CubeSide::Top(_) => {
+                    for (x, y) in pixels {
+                        transform.insert((*x, *y), (*x, *y, quadrant_size));
+                    }
+                }
+                CubeSide::Front(_) => {
+                    for (x, y) in pixels {
+                        transform.insert((*x, *y), (*x, max_y, quadrant_size - (*y - max_y - 1)));
+                    }
+                }
+                CubeSide::Back(_) => {
+                    for (x, y) in pixels {
+                        transform.insert((*x, *y), (*x, min_y, quadrant_size - (min_y - *y - 1)));
+                    }
+                }
+                CubeSide::Left(_) => {
+                    for (x, y) in pixels {
+                        let mut y_diff = *y;
+                        if *y > max_y {
+                            y_diff = *y - quadrant_size;
+                        } else if *y < min_y {
+                            y_diff = *y + quadrant_size;
+                        }
+                        transform.insert((*x, *y), (min_x, y_diff, quadrant_size - (min_x - *x - 1)));
+                    }
+                }
+                CubeSide::Right(_) => {
+                    for (x, y) in pixels {
+                        let mut y_diff = *y;
+                        if *y > max_y {
+                            y_diff = *y - quadrant_size;
+                        } else if *y < min_y {
+                            y_diff = *y + quadrant_size;
+                        }
+                        transform.insert((*x, *y), (max_x, y_diff, quadrant_size - (*x - max_x - 1)));
+                    }
+                }
+                CubeSide::Bottom(_) => {
+                    let mut idx = 0;
+                    for (x, y) in pixels {
+                        idx = idx % quadrant_size;
+                        let mut y_diff = *y;
+                        if *y > max_y {
+                            y_diff = *y - quadrant_size - quadrant_size;
+                        } else if *y < min_y {
+                            y_diff = *y + quadrant_size + quadrant_size;
+                        }
+                        transform.insert((*x, *y), (min_x + idx, y_diff, 1));
+                        idx += 1;
+                    }
+                }
+            }
+        }
+
+        for (_,(x,y,z)) in transform.iter() {
+            println!("{},{},{}", x, y, z);
+        }
+
+        transform
+    }
 }
 
 fn boundaries(coords: &Vec<Coord>) -> (usize, usize, usize, usize) {
@@ -177,150 +333,6 @@ fn boundaries(coords: &Vec<Coord>) -> (usize, usize, usize, usize) {
     let min_y = coords.iter().map(|(_, y)| y).min().unwrap().clone();
     let max_y = coords.iter().map(|(_, y)| y).max().unwrap().clone();
     (min_x, max_x, min_y, max_y)
-}
-
-fn fold(quadrant_size: usize, jungle: HashMap<Coord, Pixel>) -> HashMap<Coord, Coord3D> {
-    let mut cube = HashMap::new();
-    let width = jungle.iter().map(|((x, _), _)| x).max().unwrap();
-    let height = jungle.iter().map(|((_, y), _)| y).max().unwrap();
-    let quadrant_width = width / quadrant_size;
-
-    let mut quadrants = (0..12).fold(vec![], |mut acc, _| {
-        acc.push(vec![]);
-        acc
-    });
-
-    for y in 0..*height {
-        for x in 0..*width {
-            let idx = ((x as f64).div_euclid(quadrant_size as f64)
-                + ((y as f64).div_euclid(quadrant_size as f64) * quadrant_width as f64))
-                as usize;
-            let coord = (x + 1, y + 1);
-            match jungle.get(&coord) {
-                Some(Pixel::Void) | None => (),
-                _ => {
-                    quadrants[idx].push(coord);
-                }
-            }
-        }
-    }
-
-    // find top
-    let sides = (0..6)
-        .map(|x| (x, x + quadrant_width, x + quadrant_width + quadrant_width))
-        .collect::<Vec<_>>();
-
-    for (x, y, z) in sides {
-        if !quadrants[x].is_empty() && !quadrants[y].is_empty() && !quadrants[z].is_empty() {
-            cube.insert(CubeSide::Back(x), quadrants[x].clone());
-            cube.insert(CubeSide::Top(y), quadrants[y].clone());
-            cube.insert(CubeSide::Front(z), quadrants[z].clone());
-            // left
-            if !quadrants[x - 1].is_empty() {
-                cube.insert(CubeSide::Left(x - 1), quadrants[x - 1].clone());
-            } else if !quadrants[y - 1].is_empty() {
-                cube.insert(CubeSide::Left(y - 1), quadrants[y - 1].clone());
-            } else if !quadrants[z - 1].is_empty() {
-                cube.insert(CubeSide::Left(z - 1), quadrants[z - 1].clone());
-            }
-            // right
-            if !quadrants[x + 1].is_empty() {
-                cube.insert(CubeSide::Right(x + 1), quadrants[x + 1].clone());
-            } else if !quadrants[y + 1].is_empty() {
-                cube.insert(CubeSide::Right(y + 1), quadrants[y + 1].clone());
-            } else if !quadrants[z + 1].is_empty() {
-                cube.insert(CubeSide::Right(z + 1), quadrants[z + 1].clone());
-            }
-        }
-    }
-
-    let idxs: HashSet<usize> = cube
-        .keys()
-        .map(|side| match side {
-            CubeSide::Back(x) => *x,
-            CubeSide::Top(x) => *x,
-            CubeSide::Front(x) => *x,
-            CubeSide::Left(x) => *x,
-            CubeSide::Right(x) => *x,
-            CubeSide::Bottom(x) => *x,
-        })
-        .collect();
-    for bottom in 0..12 {
-        if !idxs.contains(&bottom) && !quadrants[bottom].is_empty() {
-            cube.insert(CubeSide::Bottom(bottom), quadrants[bottom].clone());
-        }
-    }
-
-    let top_coords = cube.iter().filter_map(|(side, coords)| match side {
-        CubeSide::Top(_) => Some(coords.clone()),
-        _ => None,
-    })
-    .flatten()
-    .collect::<Vec<Coord>>();
-
-    let mut transform = HashMap::new();
-    let (min_x, max_x, min_y, max_y) = boundaries(&top_coords);
-
-    for (side, pixels) in cube.iter() {
-        match side {
-            CubeSide::Top(_) => {
-                for (x, y) in pixels {
-                    transform.insert((*x, *y), (*x, *y, quadrant_size));
-                }
-            }
-            CubeSide::Front(_) => {
-                for (x, y) in pixels {
-                    transform.insert(
-                        (*x, *y),
-                        (*x, max_y, *y - max_y - 1),
-                    );
-                }
-            }
-            CubeSide::Back(_) => {
-                for (x, y) in pixels {
-                    transform.insert(
-                        (*x, *y),
-                        (*x, min_y, min_y - *y - 1),
-                    );
-                }
-            }
-            CubeSide::Left(_) => {
-                for (x, y) in pixels {
-                    let mut y_diff = *y;
-                    if  *y > max_y {
-                        y_diff = *y - quadrant_size;
-                    } else if *y < min_y {
-                        y_diff = *y + quadrant_size;
-                    }
-                    transform.insert(
-                        (*x, *y),
-                        (min_x, y_diff, min_x - *x - 1),
-                    );
-                }
-            }
-            CubeSide::Right(_) => {
-                for (x, y) in pixels {
-                    let mut y_diff = *y;
-                    if  *y > max_y {
-                        y_diff = *y - quadrant_size;
-                    } else if *y < min_y {
-                        y_diff = *y + quadrant_size;
-                    }
-                    transform.insert(
-                        (*x, *y),
-                        (max_x, y_diff, *x - max_x - 1),
-                    );
-                }
-            }
-            CubeSide::Bottom(_) => {}
-        }
-    }
-
-    for (_, y) in &transform {
-        println!("{},{},{}", y.0, y.1, y.2);
-    }
-
-    transform
 }
 
 fn parse_jungle(input: &str) -> IResult<&str, Vec<Pixel>> {
@@ -403,13 +415,11 @@ fn day22(path: &str, is_cube: bool) -> usize {
         is_cube,
     };
 
-    if is_cube {
-        fold(santa.cube_size(), santa.jungle.clone());
-    }
+    let cube = santa.fold();
 
     route.iter().for_each(|direction| match direction {
         Move::Left | Move::Right => santa.turn(direction),
-        Move::Forward(steps) => (0..*steps).for_each(|_| santa.walk()),
+        Move::Forward(steps) => (0..*steps).for_each(|_| santa.walk(&cube)),
     });
 
     santa.password()
@@ -428,6 +438,12 @@ mod tests {
 
     #[test]
     fn find_cube_password() {
+        let actual = day22("./data/day22.txt", true);
+        assert_eq!(actual, 5031);
+    }
+
+    #[test]
+    fn find_next_move() {
         let actual = day22("./data/day22.txt", true);
         assert_eq!(actual, 5031);
     }
