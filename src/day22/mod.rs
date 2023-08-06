@@ -1,12 +1,10 @@
 #![allow(dead_code)]
 
 use std::{
-    cmp,
     collections::{HashMap, HashSet},
     fs,
 };
 
-use itertools::Itertools;
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -17,7 +15,14 @@ use nom::{
 };
 
 type Coord = (usize, usize);
-type Coord3D = (usize, usize, usize);
+
+#[derive(Debug, PartialEq)]
+struct Coord3D {
+    x: usize,
+    y: usize,
+    z: usize,
+    plane: CubeSide,
+}
 
 struct Person {
     facing: Direction,
@@ -120,14 +125,65 @@ impl Person {
     }
 
     fn wrap_cube(&mut self, (x, y): &Coord, cube: &HashMap<Coord, Coord3D>) {
-        //if let Some(result) = cube.get(&(11, 12)) {
-        if let Some(result) = cube.get(&(12, 6)) {
+        if let Some(result) = cube.get(&(*x, *y)) {
             let others = cube
                 .iter()
-                .filter(|(_, (xx, yy, zz))| *xx == result.0 && *yy == result.1 && *zz == result.2)
-                .map(|(x,_)| x)
+                .filter(|(_, d3)| d3.x == result.x && d3.y == result.y && d3.z == result.z)
+                .filter(|(coord, _)| **coord != (*x, *y))
+                .map(|(x, _)| x)
                 .collect::<Vec<_>>();
-            println!("{:?} {:?}", (x,y), others);
+            if others.len() == 1 {
+                match self.jungle.get(others[0]) {
+                    Some(Pixel::Open) => {
+                        self.position = *others[0];
+                        self.facing = get_direction(&self.facing, &result.plane);
+                    }
+                    _ => (),
+                }
+            } else {
+                let plane = match (&cube.get(&(*x, *y)).unwrap().plane, &self.facing) {
+                    (CubeSide::Top(_), Direction::North) => CubeSide::Back(0),
+                    (CubeSide::Top(_), Direction::East) => CubeSide::Right(0),
+                    (CubeSide::Top(_), Direction::South) => CubeSide::Front(0),
+                    (CubeSide::Top(_), Direction::West) => CubeSide::Left(0),
+                    (CubeSide::Bottom(_), Direction::North) => CubeSide::Left(0),
+                    (CubeSide::Bottom(_), Direction::East) => CubeSide::Front(0),
+                    (CubeSide::Bottom(_), Direction::South) => CubeSide::Right(0),
+                    (CubeSide::Bottom(_), Direction::West) => CubeSide::Back(0),
+                    (CubeSide::Left(_), Direction::North) => CubeSide::Top(0),
+                    (CubeSide::Left(_), Direction::East) => CubeSide::Front(0),
+                    (CubeSide::Left(_), Direction::South) => CubeSide::Bottom(0),
+                    (CubeSide::Left(_), Direction::West) => CubeSide::Back(0),
+                    (CubeSide::Right(_), Direction::North) => CubeSide::Bottom(0),
+                    (CubeSide::Right(_), Direction::East) => CubeSide::Front(0),
+                    (CubeSide::Right(_), Direction::South) => CubeSide::Top(0),
+                    (CubeSide::Right(_), Direction::West) => CubeSide::Back(0),
+                    (CubeSide::Front(_), Direction::North) => CubeSide::Top(0),
+                    (CubeSide::Front(_), Direction::East) => CubeSide::Right(0),
+                    (CubeSide::Front(_), Direction::South) => CubeSide::Bottom(0),
+                    (CubeSide::Front(_), Direction::West) => CubeSide::Left(0),
+                    (CubeSide::Back(_), Direction::North) => CubeSide::Bottom(0),
+                    (CubeSide::Back(_), Direction::East) => CubeSide::Right(0),
+                    (CubeSide::Back(_), Direction::South) => CubeSide::Top(0),
+                    (CubeSide::Back(_), Direction::West) => CubeSide::Left(0),
+                };
+                let with_plane = cube
+                    .iter()
+                    .filter(|(_, d3)| {
+                        d3.x == result.x
+                            && d3.y == result.y
+                            && d3.z == result.z
+                            && is_same_plane(&plane, &d3.plane)
+                    })
+                    .filter(|(coord, _)| **coord != (*x, *y))
+                    .map(|(x, _)| x)
+                    .collect::<Vec<_>>();
+                if with_plane.len() != 1 {
+                    panic!("No unqiue cube found");
+                }
+                self.position = *with_plane[0];
+                self.facing = get_direction(&self.facing, &result.plane);
+            }
         }
     }
 
@@ -267,63 +323,162 @@ impl Person {
             match side {
                 CubeSide::Top(_) => {
                     for (x, y) in pixels {
-                        transform.insert((*x, *y), (*x, *y, quadrant_size));
+                        transform.insert(
+                            (*x, *y),
+                            Coord3D {
+                                x: *x,
+                                y: *y,
+                                z: quadrant_size,
+                                plane: side.clone(),
+                            },
+                        );
                     }
                 }
                 CubeSide::Front(_) => {
                     for (x, y) in pixels {
-                        transform.insert((*x, *y), (*x, max_y, quadrant_size - (*y - max_y - 1)));
+                        let new_x = *x;
+                        let new_y = max_y;
+                        let new_z = quadrant_size - ((y - 1) % quadrant_size);
+                        transform.insert(
+                            (*x, *y),
+                            Coord3D {
+                                x: new_x,
+                                y: new_y,
+                                z: new_z,
+                                plane: side.clone(),
+                            },
+                        );
                     }
                 }
                 CubeSide::Back(_) => {
                     for (x, y) in pixels {
-                        transform.insert((*x, *y), (*x, min_y, quadrant_size - (min_y - *y - 1)));
+                        let new_x = *x;
+                        let new_y = min_y;
+                        let new_z = ((y - 1) % quadrant_size) + 1;
+                        transform.insert(
+                            (*x, *y),
+                            Coord3D {
+                                x: new_x,
+                                y: new_y,
+                                z: new_z,
+                                plane: side.clone(),
+                            },
+                        );
                     }
                 }
                 CubeSide::Left(_) => {
                     for (x, y) in pixels {
-                        let mut y_diff = *y;
+                        let new_x = min_x;
+                        let mut new_y = *y;
+                        let mut new_z = ((x - 1) % quadrant_size) + 1;
                         if *y > max_y {
-                            y_diff = *y - quadrant_size;
-                        } else if *y < min_y {
-                            y_diff = *y + quadrant_size;
+                            new_y = min_x + ((*x - 1) % quadrant_size);
+                            new_z = quadrant_size - ((*y - 1) % quadrant_size);
                         }
-                        transform.insert((*x, *y), (min_x, y_diff, quadrant_size - (min_x - *x - 1)));
+                        transform.insert(
+                            (*x, *y),
+                            Coord3D {
+                                x: new_x,
+                                y: new_y,
+                                z: new_z,
+                                plane: side.clone(),
+                            },
+                        );
                     }
                 }
                 CubeSide::Right(_) => {
                     for (x, y) in pixels {
-                        let mut y_diff = *y;
-                        if *y > max_y {
-                            y_diff = *y - quadrant_size;
-                        } else if *y < min_y {
-                            y_diff = *y + quadrant_size;
+                        let new_x = max_x;
+                        let mut new_y = max_y - (x - max_x - 1);
+                        let mut new_z = quadrant_size - ((y - 1) % quadrant_size);
+                        if *y < min_y {
+                            new_y = min_x + ((*x - 1) % quadrant_size);
+                            new_z = ((y - 1) % quadrant_size) + 1;
                         }
-                        transform.insert((*x, *y), (max_x, y_diff, quadrant_size - (*x - max_x - 1)));
+                        transform.insert(
+                            (*x, *y),
+                            Coord3D {
+                                x: new_x,
+                                y: new_y,
+                                z: new_z,
+                                plane: side.clone(),
+                            },
+                        );
                     }
                 }
                 CubeSide::Bottom(_) => {
-                    let mut idx = 0;
                     for (x, y) in pixels {
-                        idx = idx % quadrant_size;
-                        let mut y_diff = *y;
+                        let mut new_x = max_x - (*x - 1 % quadrant_size);
+                        let mut new_y = *y;
+                        let new_z = 1;
                         if *y > max_y {
-                            y_diff = *y - quadrant_size - quadrant_size;
-                        } else if *y < min_y {
-                            y_diff = *y + quadrant_size + quadrant_size;
+                            new_x = min_x + ((*y - 1) % quadrant_size);
+                            new_y = min_x + ((*x - 1) % quadrant_size);
                         }
-                        transform.insert((*x, *y), (min_x + idx, y_diff, 1));
-                        idx += 1;
+                        transform.insert(
+                            (*x, *y),
+                            Coord3D {
+                                x: new_x,
+                                y: new_y,
+                                z: new_z,
+                                plane: side.clone(),
+                            },
+                        );
                     }
                 }
             }
         }
 
-        for (_,(x,y,z)) in transform.iter() {
-            println!("{},{},{}", x, y, z);
-        }
-
         transform
+    }
+}
+
+// this will depend on the initial layout of the 2d grid :<
+// currently is it targeted the test input
+// TODO: make this more generic
+fn get_direction(facing: &Direction, plane: &CubeSide) -> Direction {
+    match (facing, plane) {
+        (Direction::North, CubeSide::Top(_)) => Direction::North,
+        (Direction::East, CubeSide::Top(_)) => Direction::South,
+        (Direction::South, CubeSide::Top(_)) => Direction::South,
+        (Direction::West, CubeSide::Top(_)) => Direction::South,
+
+        (Direction::North, CubeSide::Front(_)) => Direction::North,
+        (Direction::East, CubeSide::Front(_)) => Direction::East,
+        (Direction::South, CubeSide::Front(_)) => Direction::North,
+        (Direction::West, CubeSide::Front(_)) => Direction::South,
+
+        (Direction::North, CubeSide::Back(_)) => Direction::South,
+        (Direction::East, CubeSide::Back(_)) => Direction::West,
+        (Direction::West, CubeSide::Back(_)) => Direction::North,
+        (Direction::South, CubeSide::Back(_)) => Direction::South,
+
+        (Direction::North, CubeSide::Right(_)) => Direction::West,
+        (Direction::East, CubeSide::Right(_)) => Direction::West,
+        (Direction::South, CubeSide::Right(_)) => Direction::East,
+        (Direction::West, CubeSide::Right(_)) => Direction::West,
+
+        (Direction::North, CubeSide::Left(_)) => Direction::East,
+        (Direction::East, CubeSide::Left(_)) => Direction::East,
+        (Direction::South, CubeSide::Left(_)) => Direction::East,
+        (Direction::West, CubeSide::Left(_)) => Direction::West,
+
+        (Direction::East, CubeSide::Bottom(_)) => Direction::East,
+        (Direction::North, CubeSide::Bottom(_)) => Direction::South,
+        (Direction::South, CubeSide::Bottom(_)) => Direction::North,
+        (Direction::West, CubeSide::Bottom(_)) => Direction::North,
+    }
+}
+
+fn is_same_plane(plane: &CubeSide, other: &CubeSide) -> bool {
+    match (plane, other) {
+        (CubeSide::Top(_), CubeSide::Top(_)) => true,
+        (CubeSide::Bottom(_), CubeSide::Bottom(_)) => true,
+        (CubeSide::Left(_), CubeSide::Left(_)) => true,
+        (CubeSide::Right(_), CubeSide::Right(_)) => true,
+        (CubeSide::Front(_), CubeSide::Front(_)) => true,
+        (CubeSide::Back(_), CubeSide::Back(_)) => true,
+        _ => false,
     }
 }
 
@@ -443,14 +598,14 @@ mod tests {
     }
 
     #[test]
-    fn find_next_move() {
-        let actual = day22("./data/day22.txt", true);
-        assert_eq!(actual, 5031);
-    }
-
-    #[test]
     fn find_password_part_a() {
         let actual = day22("./data/day22final.txt", false);
         assert_eq!(actual, 31568);
+    }
+
+    #[test]
+    fn find_cube_password_partb() {
+        let actual = day22("./data/day22final.txt", true);
+        assert_eq!(actual, 172076); // too high
     }
 }
