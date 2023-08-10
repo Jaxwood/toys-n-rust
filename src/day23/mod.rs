@@ -277,4 +277,10 @@ mod tests {
         let actual = day23("./data/day23.txt");
         assert_eq!(actual, 110);
     }
+
+    #[test]
+    fn find_area_part_a() {
+        let actual = day23("./data/day23final.txt");
+        assert_eq!(actual, 4158);
+    }
 }
