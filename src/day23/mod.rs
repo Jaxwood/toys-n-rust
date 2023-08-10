@@ -233,28 +233,7 @@ fn parse(input: &str) -> IResult<&str, HashMap<Coord, Pixel>> {
     Ok((input, result))
 }
 
-fn print_map(map: &HashMap<Coord, Pixel>) {
-    let ((col_min, _), _) = map.iter().min_by_key(|(&(x, _), _)| x).unwrap();
-    let ((col_max, _), _) = map.iter().max_by_key(|(&(x, _), _)| x).unwrap();
-    let ((_, row_min), _) = map.iter().min_by_key(|(&(_, y), _)| y).unwrap();
-    let ((_, row_max), _) = map.iter().max_by_key(|(&(_, y), _)| y).unwrap();
-
-    for y in *row_min + 1..*row_max {
-        for x in *col_min + 1..*col_max {
-            print!(
-                "{}",
-                match map.get(&(x, y)) {
-                    Some(Pixel::Elf(_)) => "#",
-                    Some(Pixel::Open) => ".",
-                    None => " ",
-                }
-            );
-        }
-        println!();
-    }
-}
-
-fn day23(path: &str) -> usize {
+fn day23a(path: &str) -> usize {
     let input = fs::read_to_string(path).unwrap();
     let (_, map) = parse(&input).unwrap();
     let mut state = State::new(map.clone());
@@ -267,6 +246,22 @@ fn day23(path: &str) -> usize {
     state.empty_ground()
 }
 
+fn day23b(path: &str) -> usize {
+    let input = fs::read_to_string(path).unwrap();
+    let (_, map) = parse(&input).unwrap();
+    let mut state = State::new(map.clone());
+    let mut round = 1;
+    loop {
+        let moves = state.consider();
+        if moves.is_empty() {
+            return round
+        }
+        state.try_move(moves);
+        state.update();
+        round += 1;
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -274,13 +269,25 @@ mod tests {
 
     #[test]
     fn find_area() {
-        let actual = day23("./data/day23.txt");
+        let actual = day23a("./data/day23.txt");
         assert_eq!(actual, 110);
     }
 
     #[test]
+    fn find_no_moves() {
+        let actual = day23b("./data/day23.txt");
+        assert_eq!(actual, 20);
+    }
+
+    #[test]
     fn find_area_part_a() {
-        let actual = day23("./data/day23final.txt");
+        let actual = day23a("./data/day23final.txt");
         assert_eq!(actual, 4158);
+    }
+
+    #[test]
+    fn find_area_part_b() {
+        let actual = day23b("./data/day23final.txt");
+        assert_eq!(actual, 1014);
     }
 }
