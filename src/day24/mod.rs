@@ -2,11 +2,22 @@
 
 use std::{collections::HashMap, fs};
 
-use nom::{multi::{separated_list1, many1}, character::complete::newline, branch::alt, IResult, bytes::complete::tag, combinator::map};
+use nom::{
+    branch::alt,
+    bytes::complete::tag,
+    character::complete::newline,
+    combinator::map,
+    multi::{many1, separated_list1},
+    IResult,
+};
+
+struct State {
+    map: HashMap<Coord, Vec<Pixel>>,
+}
 
 type Coord = (usize, usize);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Direction {
     Up,
     Down,
@@ -14,7 +25,7 @@ enum Direction {
     Right,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Pixel {
     Rock,
     Blizzard(Direction),
@@ -34,23 +45,69 @@ fn parse_map(input: &str) -> IResult<&str, Vec<Pixel>> {
     Ok((input, map))
 }
 
-fn parse(input: &str) -> IResult<&str, HashMap<Coord, Pixel>> {
+fn parse(input: &str) -> IResult<&str, HashMap<Coord, Vec<Pixel>>> {
     let (input, map) = separated_list1(newline, parse_map)(input)?;
 
     let mut result = HashMap::new();
     for row in 0..map.len() {
         for col in 0..map[row].len() {
-            result.insert((col, row), map[row][col].clone());
+            result.insert((col, row), vec![map[row][col].clone()]);
         }
     }
 
     Ok((input, result))
 }
 
+impl State {
+    fn find_start_end(&self) -> (Coord, Coord) {
+        let start = self.map
+            .iter()
+            .filter(|(k, _)| k.1 == 0)
+            .filter(|(_, v)| **v == vec![Pixel::Open])
+            .map(|(k, _)| k)
+            .next()
+            .unwrap();
+        let row_max = self.map.keys().max_by_key(|(_, y)| y).unwrap().1;
+        let end = self.map
+            .iter()
+            .filter(|(k, _)| k.1 == row_max)
+            .filter(|(_, v)| **v == vec![Pixel::Open])
+            .map(|(k, _)| k)
+            .next()
+            .unwrap();
+        (*start, *end)
+    }
+
+    fn find_width_height(&self) -> (usize, usize) {
+        let col_max = self.map.keys().max_by_key(|(x, _)| x).unwrap().0 - 1;
+        let row_max = self.map.keys().max_by_key(|(_, y)| y).unwrap().1 - 1;
+        (col_max, row_max)
+    }
+
+    fn tick(&mut self) {
+        let (width, height) = self.find_width_height();
+        for ((x, y), pixels) in self.map.iter_mut() {
+            for pixel in pixels {
+                match pixel {
+                    Pixel::Blizzard(dir) => match dir {
+                        Direction::Up => todo!(),
+                        Direction::Down => todo!(),
+                        Direction::Left => todo!(),
+                        Direction::Right => todo!(),
+                    },
+                    _ => (),
+                }
+            }
+        }
+    }
+}
+
 fn day24a(path: &str) -> usize {
     let input = fs::read_to_string(path).unwrap();
     let (_, map) = parse(&input).unwrap();
-    println!("{:?}", map);
+    let mut state = State { map: map.clone() };
+    let (start, end) = state.find_start_end();
+    state.tick();
     0
 }
 
