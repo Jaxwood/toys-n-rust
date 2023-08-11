@@ -13,6 +13,10 @@ use nom::{
 
 struct State {
     map: HashMap<Coord, Vec<Pixel>>,
+    height: usize,
+    width: usize,
+    start: Coord,
+    end: Coord,
 }
 
 type Coord = (usize, usize);
@@ -59,8 +63,10 @@ fn parse(input: &str) -> IResult<&str, HashMap<Coord, Vec<Pixel>>> {
 }
 
 impl State {
-    fn find_start_end(&self) -> (Coord, Coord) {
-        let start = self.map
+
+    fn set_start_end(&mut self) {
+        let start = self
+            .map
             .iter()
             .filter(|(k, _)| k.1 == 0)
             .filter(|(_, v)| **v == vec![Pixel::Open])
@@ -68,24 +74,27 @@ impl State {
             .next()
             .unwrap();
         let row_max = self.map.keys().max_by_key(|(_, y)| y).unwrap().1;
-        let end = self.map
+        let end = self
+            .map
             .iter()
             .filter(|(k, _)| k.1 == row_max)
             .filter(|(_, v)| **v == vec![Pixel::Open])
             .map(|(k, _)| k)
             .next()
             .unwrap();
-        (*start, *end)
+
+        self.start = *start;
+        self.end = *end;
     }
 
-    fn find_width_height(&self) -> (usize, usize) {
+    fn set_width_height(&mut self) {
         let col_max = self.map.keys().max_by_key(|(x, _)| x).unwrap().0 - 1;
         let row_max = self.map.keys().max_by_key(|(_, y)| y).unwrap().1 - 1;
-        (col_max, row_max)
+        self.width = col_max;
+        self.height = row_max;
     }
 
     fn tick(&mut self) {
-        let (width, height) = self.find_width_height();
         for ((x, y), pixels) in self.map.iter_mut() {
             for pixel in pixels {
                 match pixel {
@@ -105,9 +114,19 @@ impl State {
 fn day24a(path: &str) -> usize {
     let input = fs::read_to_string(path).unwrap();
     let (_, map) = parse(&input).unwrap();
-    let mut state = State { map: map.clone() };
-    let (start, end) = state.find_start_end();
+    let mut state = State {
+        map: map.clone(),
+        width: 0,
+        height: 0,
+        start: (0, 0),
+        end: (0, 0),
+    };
+
+    state.set_width_height();
+    state.set_start_end();
+
     state.tick();
+
     0
 }
 
@@ -122,3 +141,4 @@ mod tests {
         assert_eq!(actual, 18);
     }
 }
+
