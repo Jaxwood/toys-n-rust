@@ -20,7 +20,6 @@ struct State {
     position: Coord,
     height: i32,
     width: i32,
-    start: Coord,
     end: Coord,
     minutes: i32,
 }
@@ -218,7 +217,6 @@ fn day24a(path: &str) -> usize {
         position: (1, 0),
         width,
         height,
-        start: (1, 0),
         end: (width - 1, height),
         minutes: 0,
     };
