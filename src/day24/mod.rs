@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::VecDeque,
     fs,
 };
 
@@ -162,31 +162,20 @@ impl State {
         result.join("")
     }
 
-    fn find_open(&self) -> HashSet<Coord> {
-        let blizzard = self
-            .storm
-            .iter()
-            .map(|bliz| Coord::from(bliz))
-            .collect::<HashSet<_>>();
-
-        let all = (1..self.height)
-            .flat_map(|row| (1..self.width).map(move |column| (column, row)))
-            .chain(vec![self.end].into_iter())
-            .collect::<HashSet<_>>();
-
-        all.difference(&blizzard).cloned().collect::<HashSet<_>>()
+    fn in_blizzard(&self, coord: &Coord) -> bool {
+        self.storm.iter().any(|blizzard| Coord::from(blizzard) == *coord)
     }
 
     fn done(&self) -> bool {
         self.position == self.end
     }
 
-    fn add(&self, (x, y): Coord) -> Coord {
-        (self.position.0 + x, self.position.1 + y)
+    fn add(&self, (x, y): &Coord) -> Coord {
+        (self.position.0 + *x, self.position.1 + *y)
     }
 
-    fn in_range(&self, (x, y): Coord) -> bool {
-        (x > 0 && y > 0 && x < self.width && y < self.height) || (self.end == (x, y))
+    fn in_range(&self, (x, y): &Coord) -> bool {
+        (*x > 0 && *y > 0 && *x < self.width && *y < self.height) || (self.end == (*x, *y))
     }
 }
 
@@ -221,40 +210,27 @@ fn day24a(path: &str) -> usize {
         minutes: 0,
     };
 
-    let mut seen = HashSet::new();
     let mut queue = VecDeque::new();
     queue.push_back(state.clone());
 
     while !queue.is_empty() {
         let mut next = queue.pop_front().unwrap();
-        let hash = &next.hash();
-        if seen.contains(hash) {
-            continue;
+        if next.done() {
+            return next.minutes as usize;
         }
-        seen.insert(hash.to_string());
         next.tick();
 
-        let open = next.find_open();
-        let moves = vec![(1, 0), (0, 1), (-1, 0), (0, -1), (0, 0)]
+        vec![(1, 0), (0, 1), (-1, 0), (0, -1), (0, 0)]
             .iter()
-            .map(|&coord| next.add(coord))
-            .filter(|&coord| next.in_range(coord))
-            .collect::<Vec<_>>();
-
-        for coord in moves {
-            if open.contains(&coord) {
+            .map(|coord| next.add(coord))
+            .filter(|coord| next.in_range(coord))
+            .filter(|coord| !next.in_blizzard(coord))
+            .for_each(|coord| {
                 let mut new_state = next.clone();
                 new_state.position = coord;
-
-                if new_state.done() {
-                    return new_state.minutes as usize;
-                }
-
                 queue.push_back(new_state);
-            }
-        }
+            });
     }
-
     0
 }
 
@@ -272,6 +248,6 @@ mod tests {
     #[test]
     fn find_shortest_path_part_a() {
         let actual = day24a("./data/day24final.txt");
-        assert_eq!(actual, 0);
+        assert_eq!(actual, 1);
     }
 }
