@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 
 use std::{
-    collections::{HashSet, VecDeque},
-    fs,
+    cmp::Ordering,
+    collections::{BinaryHeap, HashMap, HashSet},
+    fs, iter,
 };
 
 use nom::{
@@ -14,243 +15,239 @@ use nom::{
     IResult,
 };
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+struct Coord {
+    row: usize,
+    col: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct State {
-    storm: Vec<Blizzard>,
-    position: Coord,
-    height: i32,
-    width: i32,
-    end: Coord,
-    minutes: i32,
-}
-
-impl From<&Blizzard> for Coord {
-    fn from(value: &Blizzard) -> Self {
-        match value {
-            Blizzard::Up(coord) => *coord,
-            Blizzard::Down(coord) => *coord,
-            Blizzard::Left(coord) => *coord,
-            Blizzard::Right(coord) => *coord,
-        }
-    }
-}
-
-type Coord = (i32, i32);
-
 enum Pixel {
-    Storm(Blizzard),
+    Blizzard(Direction),
     Rock,
     Open,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum Blizzard {
-    Up(Coord),
-    Down(Coord),
-    Left(Coord),
-    Right(Coord),
+#[derive(PartialEq, Eq)]
+struct Node {
+    cost: usize,
+    pos: Coord,
+}
+
+impl Ord for Node {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other.cost.cmp(&self.cost)
+    }
+}
+
+impl PartialOrd for Node {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 fn parse_map(input: &str) -> IResult<&str, Vec<Pixel>> {
     let (input, map) = many1(alt((
         map(tag("."), |_| Pixel::Open),
         map(tag("#"), |_| Pixel::Rock),
-        map(tag("^"), |_| Pixel::Storm(Blizzard::Up((0, 0)))),
-        map(tag("v"), |_| Pixel::Storm(Blizzard::Down((0, 0)))),
-        map(tag("<"), |_| Pixel::Storm(Blizzard::Left((0, 0)))),
-        map(tag(">"), |_| Pixel::Storm(Blizzard::Right((0, 0)))),
+        map(tag("^"), |_| Pixel::Blizzard(Direction::Up)),
+        map(tag("v"), |_| Pixel::Blizzard(Direction::Down)),
+        map(tag("<"), |_| Pixel::Blizzard(Direction::Left)),
+        map(tag(">"), |_| Pixel::Blizzard(Direction::Right)),
     )))(input)?;
 
     Ok((input, map))
 }
 
-fn parse(input: &str) -> IResult<&str, (i32, i32, Vec<Blizzard>)> {
-    let (input, mut map) = separated_list1(newline, parse_map)(input)?;
+fn parse(input: &str) -> IResult<&str, (usize, usize, HashMap<Coord, Pixel>)> {
+    let (input, map) = separated_list1(newline, parse_map)(input)?;
 
-    let width = map[0].len() - 1;
-    let height = map.len() - 1;
+    let width = map[0].len();
+    let height = map.len();
 
-    let is_blizzard = |pixel: &Pixel| match pixel {
-        Pixel::Storm(_) => true,
-        _ => false,
-    };
-
-    let result = map
-        .iter_mut()
-        .enumerate()
-        .flat_map(|(idx, row)| {
-            row.iter_mut()
-                .enumerate()
-                .filter(|k| is_blizzard(k.1))
-                .map(|(idx2, pixel)| match pixel {
-                    Pixel::Storm(Blizzard::Up(_)) => Blizzard::Up((idx2 as i32, idx as i32)),
-                    Pixel::Storm(Blizzard::Down(_)) => Blizzard::Down((idx2 as i32, idx as i32)),
-                    Pixel::Storm(Blizzard::Left(_)) => Blizzard::Left((idx2 as i32, idx as i32)),
-                    Pixel::Storm(Blizzard::Right(_)) => Blizzard::Right((idx2 as i32, idx as i32)),
-                    _ => panic!("Not a blizzard!"),
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
-
-    Ok((input, (width as i32, height as i32, result)))
-}
-
-impl State {
-    fn tick(&mut self) {
-        self.minutes += 1;
-        self.storm.iter_mut().for_each(|blizzard| match blizzard {
-            Blizzard::Up((column, row)) => {
-                if *row == 1 {
-                    *blizzard = Blizzard::Up((*column, self.height - 1));
-                } else {
-                    *blizzard = Blizzard::Up((*column, *row - 1));
-                }
-            }
-            Blizzard::Down((column, row)) => {
-                if *row == self.height - 1 {
-                    *blizzard = Blizzard::Down((*column, 1));
-                } else {
-                    *blizzard = Blizzard::Down((*column, *row + 1));
-                }
-            }
-            Blizzard::Left((column, row)) => {
-                if *column == 1 {
-                    *blizzard = Blizzard::Left((self.width - 1, *row));
-                } else {
-                    *blizzard = Blizzard::Left((*column - 1, *row));
-                }
-            }
-            Blizzard::Right((column, row)) => {
-                if *column == self.width - 1 {
-                    *blizzard = Blizzard::Right((1, *row));
-                } else {
-                    *blizzard = Blizzard::Right((*column + 1, *row));
-                }
-            }
-        });
+    let mut result = HashMap::new();
+    for (y, row) in map.iter().enumerate() {
+        for (x, pixel) in row.iter().enumerate() {
+            result.insert(Coord { col: x, row: y }, pixel.clone());
+        }
     }
 
-    fn hash(&self) -> String {
-        let mut result: Vec<String> = Vec::new();
-        for row in 1..self.height {
-            for column in 1..self.width {
-                let pixels = self
-                    .storm
-                    .iter()
-                    .filter(|&blizzard| Coord::from(blizzard) == (column, row))
-                    .collect::<Vec<_>>();
-                if (column, row) == self.position {
-                    result.push(String::from("E"));
-                } else if pixels.is_empty() {
-                    result.push(String::from("."));
-                } else if pixels.len() > 1 {
-                    result.push(pixels.len().to_string());
-                } else {
-                    match pixels.first() {
-                        Some(blizzard) => match blizzard {
-                            Blizzard::Up(_) => result.push(String::from("^")),
-                            Blizzard::Down(_) => result.push(String::from("v")),
-                            Blizzard::Left(_) => result.push(String::from("<")),
-                            Blizzard::Right(_) => result.push(String::from(">")),
-                        },
-                        None => panic!("No blizzard!"),
+    Ok((input, (width, height, result)))
+}
+
+impl Coord {
+    fn neighbours(&self, rows: usize, cols: usize) -> Vec<Self> {
+        use Direction::*;
+        let mut neighbours = Vec::new();
+        if self.row > 0 {
+            neighbours.push(self.add_dir(&Up));
+        }
+        if self.col < cols - 1 {
+            neighbours.push(self.add_dir(&Right));
+        }
+        if self.row < rows - 1 {
+            neighbours.push(self.add_dir(&Down));
+        }
+        if self.col > 0 {
+            neighbours.push(self.add_dir(&Left));
+        }
+        neighbours
+    }
+
+    fn add_dir(&self, dir: &Direction) -> Self {
+        use Direction::*;
+        match dir {
+            Up => Coord {
+                row: self.row - 1,
+                col: self.col,
+            },
+            Right => Coord {
+                row: self.row,
+                col: self.col + 1,
+            },
+            Down => Coord {
+                row: self.row + 1,
+                col: self.col,
+            },
+            Left => Coord {
+                row: self.row,
+                col: self.col - 1,
+            },
+        }
+    }
+}
+
+fn lcm(first: usize, second: usize) -> usize {
+    first * second / gcd(first, second)
+}
+
+fn gcd(first: usize, second: usize) -> usize {
+    let mut max = first;
+    let mut min = second;
+    if min > max {
+        std::mem::swap(&mut max, &mut min);
+    }
+
+    loop {
+        let res = max % min;
+        if res == 0 {
+            return min;
+        }
+
+        max = min;
+        min = res;
+    }
+}
+
+fn bliz_maps(
+    map: &HashMap<Coord, Pixel>,
+    rows: usize,
+    cols: usize,
+    max_time: usize,
+) -> HashMap<usize, HashSet<Coord>> {
+    let mut cache = HashMap::new();
+
+    let mut blizzards: Vec<(Coord, Direction)> = map
+        .iter()
+        .filter_map(|(pos, pixel)| match pixel {
+            Pixel::Rock => None,
+            Pixel::Blizzard(dir) => Some((*pos, *dir)),
+            Pixel::Open => None,
+        })
+        .collect();
+
+    let coords = blizzards.iter().map(|(coord, _)| *coord).collect();
+    cache.insert(0, coords);
+
+    for time in 1..max_time {
+        for (coord, dir) in blizzards.iter_mut() {
+            *coord = coord.add_dir(dir);
+            match dir {
+                Direction::Left => {
+                    if coord.col == 0 {
+                        coord.col = cols - 2;
+                    }
+                }
+                Direction::Right => {
+                    if coord.col == cols - 1 {
+                        coord.col = 1;
+                    }
+                }
+                Direction::Up => {
+                    if coord.row == 0 {
+                        coord.row = rows - 2;
+                    }
+                }
+                Direction::Down => {
+                    if coord.row == rows - 1 {
+                        coord.row = 1;
                     }
                 }
             }
         }
-        result.join("")
+        let coords = blizzards.iter().map(|(coord, _)| *coord).collect();
+        cache.insert(time, coords);
     }
 
-    fn find_open(&self) -> HashSet<Coord> {
-        let blizzard = self
-            .storm
-            .iter()
-            .map(|bliz| Coord::from(bliz))
-            .collect::<HashSet<_>>();
-
-        let all = (1..self.height)
-            .flat_map(|row| (1..self.width).map(move |column| (column, row)))
-            .chain(vec![self.end].into_iter())
-            .collect::<HashSet<_>>();
-
-        all.difference(&blizzard).cloned().collect::<HashSet<_>>()
-    }
-
-    fn done(&self) -> bool {
-        self.position == self.end
-    }
-
-    fn add(&self, (x, y): Coord) -> Coord {
-        (self.position.0 + x, self.position.1 + y)
-    }
-
-    fn in_range(&self, (x, y): Coord) -> bool {
-        (x > 0 && y > 0 && x < self.width && y < self.height) || (self.end == (x, y))
-    }
-}
-
-fn forecast(state: &State) {
-    let hash = state.hash();
-
-    println!("{}:", state.minutes);
-    for row in 0..state.height - 1 {
-        for column in 0..state.width - 1 {
-            let ch = hash
-                .chars()
-                .nth((row * (state.width - 1) + column) as usize);
-            match ch {
-                Some(c) => print!("{}", c),
-                None => panic!("No char!"),
-            }
-        }
-        println!();
-    }
+    cache
 }
 
 fn day24a(path: &str) -> usize {
     let input = fs::read_to_string(path).unwrap();
-    let (_, (width, height, storm)) = parse(&input).unwrap();
+    let (_, (cols, rows, map)) = parse(&input).unwrap();
 
-    let state = State {
-        storm: storm.clone(),
-        position: (1, 0),
-        width,
-        height,
-        end: (width - 1, height),
-        minutes: 0,
+    let walls: HashSet<Coord> = map
+        .iter()
+        .filter(|(_, tile)| **tile == Pixel::Rock)
+        .map(|(pos, _)| *pos)
+        .collect();
+
+    let lcm = lcm(rows - 2, cols - 2);
+    let blizzard_maps = bliz_maps(&map, rows, cols, lcm);
+    let start = Coord { row: 0, col: 1 };
+    let end = Coord {
+        row: rows - 1,
+        col: cols - 2,
     };
 
+    let mut pq = BinaryHeap::new();
     let mut seen = HashSet::new();
-    let mut queue = VecDeque::new();
-    queue.push_back(state.clone());
 
-    while !queue.is_empty() {
-        let mut next = queue.pop_front().unwrap();
-        let hash = &next.hash();
-        if seen.contains(hash) {
-            continue;
+    pq.push(Node {
+        cost: 0,
+        pos: start,
+    });
+    seen.insert((start, 0));
+
+    while let Some(Node { cost, pos }) = pq.pop() {
+        if pos == end {
+            return cost;
         }
-        seen.insert(hash.to_string());
-        next.tick();
 
-        let open = next.find_open();
-        let moves = vec![(1, 0), (0, 1), (-1, 0), (0, -1), (0, 0)]
-            .iter()
-            .map(|&coord| next.add(coord))
-            .filter(|&coord| next.in_range(coord))
-            .collect::<Vec<_>>();
+        let new_cost = cost + 1;
+        let blizzards = &blizzard_maps[&(new_cost % lcm)];
 
-        for coord in moves {
-            if open.contains(&coord) {
-                let mut new_state = next.clone();
-                new_state.position = coord;
+        let candidates = pos
+            .neighbours(rows, cols)
+            .into_iter()
+            .chain(iter::once(pos))
+            .filter(|coord| !walls.contains(coord))
+            .filter(|coord| !blizzards.contains(coord));
 
-                if new_state.done() {
-                    return new_state.minutes as usize;
-                }
-
-                queue.push_back(new_state);
+        for new_pos in candidates {
+            if seen.insert((new_pos, new_cost)) {
+                pq.push(Node {
+                    cost: new_cost,
+                    pos: new_pos,
+                });
             }
         }
     }
@@ -272,6 +269,6 @@ mod tests {
     #[test]
     fn find_shortest_path_part_a() {
         let actual = day24a("./data/day24final.txt");
-        assert_eq!(actual, 0);
+        assert_eq!(actual, 269);
     }
 }
