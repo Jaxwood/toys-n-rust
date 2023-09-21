@@ -2,6 +2,8 @@
 
 My solutions for Advent of code 2022 in Rust.
 
+![img](2022.gif)
+
 ## Test
 
 Run the tests with the following command:
